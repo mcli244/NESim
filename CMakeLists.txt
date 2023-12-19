@@ -26,4 +26,5 @@ add_executable(${TAGET}
 
 target_link_libraries(${TAGET}
 		pthread
+        curses
 		)
