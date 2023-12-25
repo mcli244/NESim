@@ -31,5 +31,5 @@ add_executable(${TAGET}
 string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
 target_link_libraries(${TAGET}
 		pthread
-        ${SDL2_LIBRARIES}
+        curses
 		)

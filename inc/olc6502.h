@@ -142,6 +142,7 @@ namespace nes
         void    SetFlag(FLAGS6502 f, bool v);
 
         uint8_t read(uint16_t addr);
+        uint8_t read(uint16_t addr, bool s);
         void write(uint16_t addr, uint8_t value);
         void pushStack(uint8_t value);
         uint8_t pullStack();
@@ -152,8 +153,10 @@ namespace nes
         void nmi();		// 不可屏蔽中断，像一些致命错误发生时，必须对此进行处理的中断动作，同中断请求类似，但是不可被屏蔽。
         void clock();	// 模拟一个时钟节拍，在硬件上由晶振提供一个稳定的时钟节拍，CPU据此进行指令的动作。
 
+        bool complete();
+        bool pass();
+        std::map<uint16_t, std::string> disassemble(uint16_t nStart, uint16_t nStop);
         
-
     public:
 
         olc6502();
