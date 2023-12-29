@@ -135,9 +135,10 @@ namespace nes
         uint8_t XXX();
 
     private:
-        class bus cpuBus;
+        nes::bus *cpuBus;
 
     public:
+        void connectBus(nes::bus *bus);
         uint8_t GetFlag(FLAGS6502 f);
         void    SetFlag(FLAGS6502 f, bool v);
 
@@ -160,6 +161,7 @@ namespace nes
     public:
 
         olc6502();
+        olc6502(nes::bus *bus);
         ~olc6502();
     };
 }

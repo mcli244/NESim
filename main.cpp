@@ -6,7 +6,11 @@
 
 int main(int argc, char **argv)
 {
-    nes::olc6502 cpu;
+    nes::bus     mainBus;
+    nes::olc6502 cpu(&mainBus);
+    
+
+    // cpu.connectBus(&mainBus);
     
 
     // Convert hex string into bytes for RAM

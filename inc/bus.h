@@ -1,7 +1,6 @@
 #pragma once
 #include <vector>
 #include <cstdint>
-
 namespace nes
 {
     using BUS_ADDR = std::uint16_t;    // 针对6502CPU来说，地址线为16bit
