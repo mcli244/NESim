@@ -75,7 +75,7 @@ namespace nes
 
     uint8_t olc6502::read(uint16_t addr)
     {
-        if(cpuBus)
+        if(cpuBus)     // 8KB的内存映射，实际只有2KB的SRAM 参考：https://zhuanlan.zhihu.com/p/599355283
             return cpuBus->read(addr);
         return 0;
     }

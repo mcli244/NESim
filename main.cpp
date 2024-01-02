@@ -3,31 +3,38 @@
 #include <sstream>
 #include <unistd.h>
 #include "olc6502.h"
+#include "olc2c02.h"
+#include "Cartridge.h"
+#include "log.h"
 
 int main(int argc, char **argv)
 {
+    Log::get_instance()->init("./nesim.log", 0, 2000, 800000, 0);
+    LOG_INFO("build:%s %s", __DATE__, __TIME__);
+
     nes::bus     mainBus;
     nes::olc6502 cpu(&mainBus);
-    
+    nes::olc2c02 ppu(&mainBus);
 
-    // cpu.connectBus(&mainBus);
-    
+    nes::Cartridge cartridge("./SuperMarioBros.nes");
+    // return 0;
 
     // Convert hex string into bytes for RAM
     std::stringstream ss;
     ss << "A2 03 8E 00 00 A2 64 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-    uint16_t nOffset = 0x8000;
+    uint16_t nOffset = 0x400;
+    uint16_t index = nOffset;
     while (!ss.eof())
     {
         std::string b;
         ss >> b;
 
-        cpu.write(nOffset++, (uint8_t)std::stoul(b, nullptr, 16));
+        mainBus.write(index++, (uint8_t)std::stoul(b, nullptr, 16));
     }
 
     // Set Reset Vector
-    cpu.write(0xFFFC, 0x00);
-    cpu.write(0xFFFD, 0x80);
+    mainBus.write(cpu.ResetVector, nOffset&0xff);
+    mainBus.write(cpu.ResetVector+1, nOffset>>8 & 0xff);
 
     cpu.reset();
 
@@ -74,7 +81,7 @@ int main(int argc, char **argv)
             }
         }
 
-        addr = 0x8000;
+        addr = nOffset;
         for(int i=0; i<10; i++)
         {
             mvprintw(i + 17, 0, "$%04X: ", addr);

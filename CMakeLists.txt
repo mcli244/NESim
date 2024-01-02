@@ -16,11 +16,18 @@ set(CMAKE_CXX_FLAGS, "${CXX_FLAGS}")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
 find_package(SDL2 REQUIRED)
-include_directories(${SDL2_INCLUDE_DIRS} inc)
+include_directories(${SDL2_INCLUDE_DIRS} 
+	inc
+	${PROJECT_SOURCE_DIR}/log
+	)
 
 set (SRC_LIST 
 	${PROJECT_SOURCE_DIR}/src/bus.cpp
 	${PROJECT_SOURCE_DIR}/src/olc6502.cpp
+	${PROJECT_SOURCE_DIR}/src/olc2c02.cpp
+	${PROJECT_SOURCE_DIR}/src/Cartridge.cpp
+	${PROJECT_SOURCE_DIR}/src/Mapper000.cpp
+	${PROJECT_SOURCE_DIR}/log/log.cpp
 	${PROJECT_SOURCE_DIR}/main.cpp
 	)
 
