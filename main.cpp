@@ -14,41 +14,16 @@ int main(int argc, char **argv)
 
     nes::bus     mainBus;
     nes::olc6502 cpu(&mainBus);
-    nes::olc2c02 ppu(&mainBus);
+    //nes::olc2c02 ppu(&mainBus);
 
-    nes::Cartridge cartridge("./SuperMarioBros.nes");
-    // return 0;
-
-    // Convert hex string into bytes for RAM
-    std::stringstream ss;
-    ss << "A2 03 8E 00 00 A2 64 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-    uint16_t nOffset = 0x400;
-    uint16_t index = nOffset;
-    while (!ss.eof())
-    {
-        std::string b;
-        ss >> b;
-
-        mainBus.write(index++, (uint8_t)std::stoul(b, nullptr, 16));
-    }
-
-    // Set Reset Vector
-    mainBus.write(cpu.ResetVector, nOffset&0xff);
-    mainBus.write(cpu.ResetVector+1, nOffset>>8 & 0xff);
-
+    nes::Cartridge cartridge;
+    cartridge.loadNesFile(argv[1]);
+    mainBus.connectCartridge(&cartridge);
     cpu.reset();
-
-    // Extract dissassembly
     std::map<uint16_t, std::string> mapAsm;
     mapAsm = cpu.disassemble(0x0000, 0xFFFF);
 
-    // std::map<uint16_t, std::string>::iterator m1_Iter;
-    // for ( m1_Iter = mapAsm.begin( ); m1_Iter != mapAsm.end( ); m1_Iter++ )
-    //     std::cout << m1_Iter->first<<" "<<m1_Iter->second<<std::endl;
-
-    // return 0;
-
-	initscr(); //初始化屏幕进入curses图形化工作方式
+	initscr(); 
     if(!has_colors()){
         endwin();
         fprintf(stderr,"Error - no color support on this terminal \n");
@@ -81,7 +56,7 @@ int main(int argc, char **argv)
             }
         }
 
-        addr = nOffset;
+        addr = cpu.pc;
         for(int i=0; i<10; i++)
         {
             mvprintw(i + 17, 0, "$%04X: ", addr);
@@ -93,8 +68,10 @@ int main(int argc, char **argv)
 
         mvprintw(0, 60, "STATUS: N V - B D I Z C");
         mvprintw(1, 60, "STATUS: %d %d %d %d %d %d %d %d", 
-            cpu.GetFlag(nes::olc6502::FLAGS6502::N), cpu.GetFlag(nes::olc6502::FLAGS6502::V), cpu.GetFlag(nes::olc6502::FLAGS6502::U), cpu.GetFlag(nes::olc6502::FLAGS6502::B), 
-            cpu.GetFlag(nes::olc6502::FLAGS6502::D), cpu.GetFlag(nes::olc6502::FLAGS6502::I), cpu.GetFlag(nes::olc6502::FLAGS6502::Z), cpu.GetFlag(nes::olc6502::FLAGS6502::C));
+            cpu.GetFlag(nes::olc6502::FLAGS6502::N), cpu.GetFlag(nes::olc6502::FLAGS6502::V), 
+            cpu.GetFlag(nes::olc6502::FLAGS6502::U), cpu.GetFlag(nes::olc6502::FLAGS6502::B), 
+            cpu.GetFlag(nes::olc6502::FLAGS6502::D), cpu.GetFlag(nes::olc6502::FLAGS6502::I), 
+            cpu.GetFlag(nes::olc6502::FLAGS6502::Z), cpu.GetFlag(nes::olc6502::FLAGS6502::C));
 
         mvprintw(2, 60, "STACK: $%04X [%04d]", cpu.stkp, cpu.stkp);
         mvprintw(3, 60, "PC: $%04X [%04d]", cpu.pc, cpu.pc);

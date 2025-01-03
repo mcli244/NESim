@@ -9,10 +9,6 @@ namespace nes
     {
         
     public:
-        const uint16_t NMIVector = 0xfffa;
-        const uint16_t ResetVector = 0xfffc;
-        const uint16_t IRQVector = 0xfffe;
-
         enum FLAGS6502
         {
             C = (1 << 0),	// Carry Flag(C)       ：进位标志(一般对于无符号数来说)，如果最近一条指令有溢出——上溢：超出了 255，下溢：低于 0，则设置该 bit 为 1，比如说执行 255 + 1 会上溢，将 Carry Flag 置 1。有了 Carry Flag，使得可以进行长度超过 8 位的运算。

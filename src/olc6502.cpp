@@ -1,4 +1,5 @@
 #include "olc6502.h"
+#include "log.h"
 
 namespace nes
 {
@@ -96,7 +97,7 @@ namespace nes
     
     void olc6502::reset(void)
     {
-        uint16_t addr_tmp = ResetVector;    // 复位的向量表，读取出来复位对应的程序地址，将其赋值给PC
+        const uint16_t addr_tmp = nes::bus::ResetVector;    // 复位的向量表，读取出来复位对应的程序地址，将其赋值给PC
         uint16_t lo = read(addr_tmp + 0);
         uint16_t hi = read(addr_tmp + 1);
 
@@ -105,6 +106,7 @@ namespace nes
         stkp = 0xFD;
 
         cycles = 8; // 复位动作需要8个时钟周期，实际这里模拟应该不需要，硬件复位是一个操作然后等待8个时钟后完成以上动作，这里先保留这个时钟节拍。
+        LOG_DEBUG("reset lo:0x%x hi:0x%x pc:0x%x", lo, hi, pc);
     }
 
     void olc6502::pushStack(uint8_t value)
@@ -136,7 +138,7 @@ namespace nes
 
             pushStack(stkp);
 
-            uint16_t addr_tmp = IRQVector;    // 中断向量表，读取出来复位对应的程序地址，将其赋值给PC
+            uint16_t addr_tmp = nes::bus::IRQVector;    // 中断向量表，读取出来复位对应的程序地址，将其赋值给PC
             uint16_t lo = read(addr_tmp + 0);
             uint16_t hi = read(addr_tmp + 1);
 
@@ -160,7 +162,7 @@ namespace nes
 
         pushStack(stkp);
 
-        uint16_t addr_tmp = NMIVector;    // 向量表，读取出来复位对应的程序地址，将其赋值给PC
+        uint16_t addr_tmp = nes::bus::NMIVector;    // 向量表，读取出来复位对应的程序地址，将其赋值给PC
         uint16_t lo = read(addr_tmp + 0);
         uint16_t hi = read(addr_tmp + 1);
 
