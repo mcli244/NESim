@@ -14,11 +14,12 @@ int main(int argc, char **argv)
 
     nes::bus     mainBus;
     nes::olc6502 cpu(&mainBus);
-    //nes::olc2c02 ppu(&mainBus);
+    nes::olc2c02 ppu;
 
     nes::Cartridge cartridge;
     cartridge.loadNesFile(argv[1]);
     mainBus.connectCartridge(&cartridge);
+    mainBus.connectPPU(&ppu);
     cpu.reset();
     std::map<uint16_t, std::string> mapAsm;
     mapAsm = cpu.disassemble(0x0000, 0xFFFF);

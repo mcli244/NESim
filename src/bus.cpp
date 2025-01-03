@@ -7,14 +7,23 @@ namespace nes
     cpuRAM(2048, 0),
     ResetRAM(2, 0)  // 测试使用
     {
-
+        m_cart = nullptr;
+        m_ppu = nullptr;
     }
 
-    bus::~bus(){};
+    bus::~bus(){
+        m_cart = nullptr;
+        m_ppu = nullptr;
+    };
 
     bool bus::connectCartridge(nes::Cartridge *cart)
     {
         m_cart = cart;
+    }
+
+    bool bus::connectPPU(nes::olc2c02 *ppu)
+    {
+        m_ppu = ppu;
     }
 
     bus::BUS_DATA bus::read(BUS_ADDR addr)
@@ -24,7 +33,8 @@ namespace nes
             return cpuRAM[addr & 0x7FF];  // 2KB
         else if(addr < 0x4000) // ppu
         {
-
+            if(m_ppu)
+                return m_ppu->read(addr);
         }
         else if(addr < 0x4020)    // IO Reg
         {
@@ -47,7 +57,8 @@ namespace nes
             cpuRAM[addr & 0x7FF] = value;  // 2KB
         else if(addr < 0x4000) // ppu
         {
-
+            if(m_ppu)
+                m_ppu->write(addr, value);
         }
         else if(addr < 0x4020)    // IO Reg
         {

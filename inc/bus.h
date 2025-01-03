@@ -2,7 +2,7 @@
 #include <vector>
 #include <cstdint>
 #include "Cartridge.h"
-
+#include "olc2c02.h"
 /*
 Address range	Size	Device
 $0000–$07FF	    $0800	2 KB internal RAM
@@ -42,11 +42,13 @@ namespace nes
         BUS_DATA read(BUS_ADDR addr);
         void write(BUS_ADDR addr, BUS_DATA value);
         bool connectCartridge(nes::Cartridge *cart);
+        bool connectPPU(nes::olc2c02 *ppu);
 
     private:
         std::vector<BUS_DATA> cpuRAM;    // 总线上挂的内存，用容器模拟    2KB
         nes::Cartridge *m_cart = nullptr;
         std::vector<BUS_DATA> ResetRAM;    // 测试使用
+        nes::olc2c02 *m_ppu = nullptr;
     };
 }
 
