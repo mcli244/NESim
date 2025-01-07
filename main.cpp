@@ -6,6 +6,7 @@
 #include "olc2c02.h"
 #include "Cartridge.h"
 #include "log.h"
+#include "map.h"
 
 int main(int argc, char **argv)
 {
@@ -17,12 +18,60 @@ int main(int argc, char **argv)
     nes::olc2c02 ppu;
 
     nes::Cartridge cartridge;
-    cartridge.loadNesFile(argv[1]);
+    if(argc < 2)
+    {
+        LOG_ERROR("Usage: %s <NesFile>", argv[0]);
+        return 0;
+    }
+    
+    if(!cartridge.loadNesFile(argv[1]))
+    {
+        LOG_ERROR("load file failed file:%s", argv[1]);
+        return 0;
+    }
     mainBus.connectCartridge(&cartridge);
     mainBus.connectPPU(&ppu);
     cpu.reset();
     std::map<uint16_t, std::string> mapAsm;
     mapAsm = cpu.disassemble(0x0000, 0xFFFF);
+
+
+    Map map(50, 50);
+    map.Clear();
+    map.DrawPoint(0, 0, 0xff0000);
+
+    uint8_t tile[2][16];
+    int i, j;
+    for(j=0; j<2; j++)
+    for(int i=0; i<16; i++)
+        tile[j][i] = cpu.read(0x6000 + i + j*16);
+    
+    uint8_t tmp, tt, index;
+    int x,y,z,x0,y0;
+    
+    x0 = y0 = 0;
+    for(x=0; x<8; x++)
+    {
+        for(y=0; y<8; y++)
+        {
+            index = y*2;
+            if(x >= 4) index += 1;
+            tmp = (tile[0][index] >> (8 - x)) & 0x01;
+            tmp |= ((tile[0][index + 8] >> (8 - x)) & 0x01) << 1;
+            switch (tmp)
+            {
+            case 0: map.DrawPoint(x+x0, y+y0, 0); break;
+            case 1: map.DrawPoint(x+x0, y+y0, 63); break;
+            case 2: map.DrawPoint(x+x0, y+y0, 127); break;
+            case 3: map.DrawPoint(x+x0, y+y0, 255); break;
+            default:
+                LOG_ERROR("tmp:0x%x", tmp);
+                break;
+            }
+        }
+    }
+
+    map.Refresh();
 
 	initscr(); 
     if(!has_colors()){
@@ -47,7 +96,7 @@ int main(int argc, char **argv)
     {
         clear();
         // box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
-        int addr = 0;
+        int addr = 0x6000;
         for(int i=0; i<16; i++)
         {
             mvprintw(i, 0, "$%04X: ", addr);

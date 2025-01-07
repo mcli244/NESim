@@ -76,11 +76,13 @@ namespace nes
 
     bool Cartridge::loadNesFile(std::string nesFile)
     {
+        bool ret = false;
         std::ifstream ifs;
         ifs.open(nesFile, std::ifstream::binary);
         if (!ifs.is_open())
         {
             LOG_ERROR("File open fialed:%s", nesFile.c_str());
+            return false;
         }
 
         // Read file header
@@ -116,23 +118,32 @@ namespace nes
         // Load appropriate mapper
         switch (nMapperID)
         {
-            case 0: pMapper = std::make_shared<nes::Mapper000>(nPRGBanks, nCHRBanks); break;
+            case 0: 
+                pMapper = std::make_shared<nes::Mapper000>(nPRGBanks, nCHRBanks); 
+                LOG_INFO("supported nMapperID:%d", nMapperID);
+                ret = true;
+            break;
             default:
                 LOG_ERROR("Not yet supported nMapperID:%d", nMapperID);
+                ret = false;
                 break;
         }
 
         printHeader();
         ifs.close();
-        return true;
+        return ret;
     }
 
     uint8_t Cartridge::readCHR(uint16_t addr)
     {
         uint16_t m_addr = 0;
+        addr -= 0x6000; // TODO:test
         if(pMapper && pMapper->CHR_mmap(addr, m_addr))
+        {
+            //LOG_INFO("readCHR addr:0x%x m_addr:0x%x dat:0x%x", addr, m_addr, vCHRMemory[m_addr]);
             return vCHRMemory[m_addr];
-        return 0;
+        }
+        return 0xff;
     }
 
     bool Cartridge::writeCHR(uint16_t addr, uint8_t value)
@@ -152,7 +163,7 @@ namespace nes
         if(pMapper && pMapper->PRG_mmap(addr, m_addr)){
             return vPRGMemory[m_addr];
         }
-        return 0;
+        return 0xff;
     }
 
     bool Cartridge::writePRG(uint16_t addr, uint8_t value)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.5)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -22,6 +22,7 @@ include_directories(${SDL2_INCLUDE_DIRS}
 	)
 
 set (SRC_LIST 
+	${PROJECT_SOURCE_DIR}/src/map.cpp
 	${PROJECT_SOURCE_DIR}/src/bus.cpp
 	${PROJECT_SOURCE_DIR}/src/olc6502.cpp
 	${PROJECT_SOURCE_DIR}/src/olc2c02.cpp
@@ -37,6 +38,7 @@ add_executable(${TAGET}
 
 string(STRIP ${SDL2_LIBRARIES} SDL2_LIBRARIES)
 target_link_libraries(${TAGET}
+	${SDL2_LIBRARIES}
 		pthread
         curses
 		)
