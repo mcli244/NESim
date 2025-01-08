@@ -180,14 +180,14 @@ namespace nes
     uint8_t Cartridge::read(uint16_t addr)
     {
         /*
-            • $4020–$6000   $1FE0   Expansion ROM
+            • $4020–$5FFF   $1FE0   Expansion ROM
             • $6000–$7FFF   $2000   Usually cartridge RAM, when present.
             • $8000–$FFF9	$7FF9   Usually cartridge ROM and mapper registers.
                 • $8000-$BFFF     $4000    LPRG-ROM
                 • $C000-$FFF9     $3FF9    UPRG-ROM
         */
         // TODO
-        if(addr >= 0x4020 && addr <= 0x6000)
+        if(addr >= 0x4020 && addr < 0x5FFF)
         {
             //LOG_ERROR("Expansion ROM! TODO!!");
         }

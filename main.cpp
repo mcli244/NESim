@@ -35,38 +35,38 @@ int main(int argc, char **argv)
     std::map<uint16_t, std::string> mapAsm;
     mapAsm = cpu.disassemble(0x0000, 0xFFFF);
 
-
-    Map map(50, 50);
+    Map map(128, 128);
     map.Clear();
     map.DrawPoint(0, 0, 0xff0000);
-
-    uint8_t tile[2][16];
-    int i, j;
-    for(j=0; j<2; j++)
-    for(int i=0; i<16; i++)
-        tile[j][i] = cpu.read(0x6000 + i + j*16);
-    
-    uint8_t tmp, tt, index;
-    int x,y,z,x0,y0;
-    
-    x0 = y0 = 0;
-    for(x=0; x<8; x++)
+ 
+    // draw tile 
+    for(uint8_t TileY=0; TileY<16; TileY++)
     {
-        for(y=0; y<8; y++)
+        for(uint8_t TileX=0; TileX<16; TileX++)
         {
-            index = y*2;
-            if(x >= 4) index += 1;
-            tmp = (tile[0][index] >> (8 - x)) & 0x01;
-            tmp |= ((tile[0][index + 8] >> (8 - x)) & 0x01) << 1;
-            switch (tmp)
+            uint32_t data_offset = TileX * 16 + TileY * 16 * 16;
+            for(uint8_t row=0; row<8; row++)
             {
-            case 0: map.DrawPoint(x+x0, y+y0, 0); break;
-            case 1: map.DrawPoint(x+x0, y+y0, 63); break;
-            case 2: map.DrawPoint(x+x0, y+y0, 127); break;
-            case 3: map.DrawPoint(x+x0, y+y0, 255); break;
-            default:
-                LOG_ERROR("tmp:0x%x", tmp);
-                break;
+                uint8_t tile_lsb = cpu.read(0x6000 + row + data_offset);
+                uint8_t tile_msb = cpu.read(0x6000 + row + 0x0008 + data_offset);
+                for(uint8_t col=0; col<8; col++)
+                {
+                    uint8_t pixel = ((tile_msb & 0x01) << 1) | (tile_lsb & 0x01);
+                    tile_lsb >>= 1;
+                    tile_msb >>= 1;
+                    uint8_t pixel_x = TileX * 8 + (7 - col);
+                    uint8_t pixel_y = TileY * 8 + row;
+                    switch (pixel)
+                    {
+                    case 0: map.DrawPoint(pixel_x, pixel_y, 0); break;
+                    case 1: map.DrawPoint(pixel_x, pixel_y, 63); break;
+                    case 2: map.DrawPoint(pixel_x, pixel_y, 127); break;
+                    case 3: map.DrawPoint(pixel_x, pixel_y, 255); break;
+                    default:
+                        LOG_ERROR("tmp:0x%x", pixel);
+                        break;
+                    }
+                }
             }
         }
     }
