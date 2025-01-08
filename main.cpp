@@ -29,8 +29,10 @@ int main(int argc, char **argv)
         LOG_ERROR("load file failed file:%s", argv[1]);
         return 0;
     }
+    ppu.connectCartridge(&cartridge);
     mainBus.connectCartridge(&cartridge);
     mainBus.connectPPU(&ppu);
+    
     cpu.reset();
     std::map<uint16_t, std::string> mapAsm;
     mapAsm = cpu.disassemble(0x0000, 0xFFFF);
@@ -96,7 +98,7 @@ int main(int argc, char **argv)
     {
         clear();
         // box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
-        int addr = 0x6000;
+        int addr = 0x2000;
         for(int i=0; i<16; i++)
         {
             mvprintw(i, 0, "$%04X: ", addr);
