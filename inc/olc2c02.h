@@ -32,18 +32,22 @@ namespace nes
         public:// TODO: 测试需要外部访问寄存器，正式版本需要改为private
             
             /* ppu内部总线操作，地址以PPU视角定义，从0x0000开始 */
-            uint8_t readVRAM(uint16_t ppu_addr);
-            uint8_t writeVRAM(uint16_t ppu_addr, uint8_t dat);
+            uint8_t busRead(uint16_t ppu_addr);
+            uint8_t busWrite(uint16_t ppu_addr, uint8_t dat);
+            void DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex);
+            void DrawAllTile(uint8_t PatternTableIndex);
         
         public: // TODO: 测试需要外部访问寄存器，正式版本需要改为private
             /* VARM */
-            uint8_t PatternTable[2][1024];
+            uint8_t VRAM[2048];
+            uint8_t PatternTable[2][4096];
             uint8_t NameTable[2][1024];
             uint8_t Palette[32];
 
             nes::Cartridge *m_cart = nullptr;
             uint16_t CurrentVRAMAddress;
             uint16_t TemporaryVRAMAddress;
+            uint8_t PPUDataTmp;
 
             struct{
                 uint8_t x;

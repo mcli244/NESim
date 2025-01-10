@@ -61,11 +61,12 @@ int main(int argc, char **argv)
     int cnt = 0;
     bool runing = true;
     int index = 0;
+    int addr = 0;
     while(runing)
     {
         clear();
-        // box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
-        int addr = 0x2000;
+        //box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
+        addr = 0x0000;
         for(int i=0; i<16; i++)
         {
             mvprintw(i, 0, "$%04X: ", addr);
@@ -75,7 +76,7 @@ int main(int argc, char **argv)
             }
         }
 
-        addr = cpu.pc;
+        addr = cpu.pc + 32;
         for(int i=0; i<16; i++)
         {
             mvprintw(i + 17, 0, "$%04X: ", addr);
@@ -85,13 +86,14 @@ int main(int argc, char **argv)
             }
         }
 
-        addr = 0;
+        mvprintw(17 + 17, 0, "############# PPU #############");
+        addr = 0x2000;
         for(int i=0; i<16; i++)
         {
-            mvprintw(i + 17 + 17, 0, "$%04X: ", addr);
+            mvprintw(i + 17 + 17 + 1, 0, "$%04X: ", addr);
             for(int y=0; y<16; y++)
             {
-                printw("%02X ", ppu.readVRAM(addr++));
+                printw("%02X ", ppu.busRead(addr++));
             }
         }
 
@@ -112,9 +114,9 @@ int main(int argc, char **argv)
         mvprintw(index++, 60, "Y:  $%02X [%04d]", cpu.y , cpu.y );
 
         index++;
-        mvprintw(index++, 60, "PPUCTRL   [%04d]", ppu.reg_ctrl.val);
-        mvprintw(index++, 60, "PPUMASK   [%04d]", ppu.reg_mask.val);
-        mvprintw(index++, 60, "PPUSTATUS [%04d]", ppu.reg_status.val);
+        mvprintw(index++, 60, "PPUCTRL   $%04X [%04d]", ppu.reg_ctrl.val, ppu.reg_ctrl.val);
+        mvprintw(index++, 60, "PPUMASK   $%04X [%04d]", ppu.reg_mask.val, ppu.reg_mask.val);
+        mvprintw(index++, 60, "PPUSTATUS $%04X [%04d]", ppu.reg_status.val, ppu.reg_status.val);
         mvprintw(index++, 60, "ScanLineCnt: %04d", ppu.ScanLineCnt);
         mvprintw(index++, 60, "PPUClockCnt: %04d", ppu.PPUClockCnt);
         index++;
@@ -151,16 +153,35 @@ int main(int argc, char **argv)
         
         refresh();//逻辑屏幕的改动在物理屏幕（显示器）上显示
 
+        #if 0
+        ppu.clock();
+        ppu.clock();
+        ppu.clock();
+
+        cpu.clock();
+        //cpu.pass();
+        usleep(1*1000);
+        
+
+        cnt ++;
+        if(cnt > 100 * 400)
+        {
+            cnt = 0;
+            runing = false; 
+            break;
+        }
+        #else
+        
         char input = getch();
         switch(input)
         {
             case ' ': 
-                cpu.clock();
-                cpu.pass();
+                ppu.clock();
+                ppu.clock();
+                ppu.clock();
 
-                ppu.clock();
-                ppu.clock();
-                ppu.clock();
+                cpu.clock();
+                // cpu.pass();
                 break;
             case 'r': 
             case 'R': 
@@ -170,6 +191,8 @@ int main(int argc, char **argv)
             case 'q': 
             case 'Q': runing = false; break;
         }
+        #endif
+        
     }
     
     endwin();//结束curses
