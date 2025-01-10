@@ -25,13 +25,16 @@ int main(int argc, char **argv)
         LOG_ERROR("load file failed file:%s", argv[1]);
         return 0;
     }
-
-    nes::bus     mainBus;
-    mainBus.connectCartridge(&cartridge);
     
     nes::olc2c02 ppu;
     ppu.connectCartridge(&cartridge);
-    mainBus.connectPPU(&ppu);
+
+    nes::bus     mainBus;
+    if(false == mainBus.connect(&cartridge, &ppu))
+    {
+        LOG_ERROR("Main Bus connect failed!");
+        return -1;
+    }
     
     nes::olc6502 cpu(&mainBus);
     cpu.reset();

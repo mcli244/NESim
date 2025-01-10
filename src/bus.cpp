@@ -4,8 +4,7 @@
 namespace nes
 {
     bus::bus():
-    cpuRAM(2048, 0),
-    ResetRAM(2, 0)  // 测试使用
+    cpuRAM(2048, 0)
     {
         m_cart = nullptr;
         m_ppu = nullptr;
@@ -16,35 +15,36 @@ namespace nes
         m_ppu = nullptr;
     };
 
-    bool bus::connectCartridge(nes::Cartridge *cart)
+    bool bus::connect(nes::Cartridge *cart, nes::olc2c02 *ppu)
     {
-        m_cart = cart;
-    }
+        if(cart && ppu)
+        {
+            m_cart = cart;
+            m_ppu = ppu;
+            return true;
+        }
 
-    bool bus::connectPPU(nes::olc2c02 *ppu)
-    {
-        m_ppu = ppu;
+        LOG_ERROR("parameter error");
+        return false;
     }
 
     bus::BUS_DATA bus::read(BUS_ADDR addr)
     {
-        //LOG_DEBUG("read addr:0x%x", addr);
-        if(addr < 0x2000) // 8KB的内存映射，但是只有前2KB有SRAM可访问
+        if(addr < 0x2000)
+        {
             return cpuRAM[addr & 0x7FF];  // 2KB
+        }
         else if(addr < 0x4000) // ppu
         {
-            if(m_ppu)
-                return m_ppu->read(addr);
+            return m_ppu->read(addr);
         }
         else if(addr < 0x4020)    // IO Reg
         {
 
         }
-        // 后面的寻址空间就是卡带中的空间了
         else
         {
-            if(m_cart)
-                return m_cart->read(addr);
+            return m_cart->read(addr);
         }
 
         return 0;
@@ -52,23 +52,21 @@ namespace nes
 
     void bus::write(BUS_ADDR addr, BUS_DATA value)
     {
-        //LOG_DEBUG("write addr:0x%x value:0x%x", addr, value);
-        if(addr < 0x2000) // 8KB的内存映射，但是只有前2KB有SRAM可访问
-            cpuRAM[addr & 0x7FF] = value;  // 2KB
+        if(addr < 0x2000)
+        {
+            cpuRAM[addr & 0x7FF] = value;
+        }
         else if(addr < 0x4000) // ppu
         {
-            if(m_ppu)
-                m_ppu->write(addr, value);
+            m_ppu->write(addr, value);
         }
         else if(addr < 0x4020)    // IO Reg
         {
 
         }
-        // 后面的寻址空间就是卡带中的空间了
         else
         {
-            if(m_cart)
-                m_cart->write(addr, value);
+            m_cart->write(addr, value);
         }
     }
 }

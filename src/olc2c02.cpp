@@ -72,6 +72,7 @@ namespace nes
         memset(&NameTable[1], 0, 1024);
 
         memset(&Palette, 0, 32);
+        reset();
     };
 
     olc2c02::~olc2c02()
