@@ -218,4 +218,8 @@ namespace nes
         }
         return false;
     }
+    CartridgeMirrorMode Cartridge::getMirrorMode(void)
+    {
+        return mirrorMode;
+    }
 }

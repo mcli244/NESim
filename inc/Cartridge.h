@@ -28,6 +28,7 @@
 
 namespace nes
 {
+    enum CartridgeMirrorMode{Vertical, Horizontal};
     class Cartridge
     {
         public:
@@ -37,7 +38,8 @@ namespace nes
             bool loadNesFile(std::string nesFile);
             uint8_t read(uint16_t addr);                // 由CPU调用，地址是CPU视角的地址，内部进由卡带处理做映射到相应的内存地址
             bool write(uint16_t addr, uint8_t value);   // 由CPU调用，地址是CPU视角的地址，内部进由卡带处理做映射到相应的内存地址
-            
+            enum CartridgeMirrorMode getMirrorMode(void);
+
         private:
             uint8_t readCHR(uint16_t addr);
             bool writeCHR(uint16_t addr, uint8_t value);
@@ -52,5 +54,6 @@ namespace nes
             uint8_t nMapperID = 0;
             uint8_t nPRGBanks = 0;
             uint8_t nCHRBanks = 0;
+            enum CartridgeMirrorMode mirrorMode;
     };
 }
