@@ -63,9 +63,10 @@ private:
     int m_close_log; //关闭日志
 };
 
-#define LOG_DEBUG(format, ...)   {Log::get_instance()->write_log(0, format, ##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_INFO(format, ...)    {Log::get_instance()->write_log(1, format, ##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_WARN(format, ...)    {Log::get_instance()->write_log(2, format, ##__VA_ARGS__); Log::get_instance()->flush();}
-#define LOG_ERROR(format, ...)   {Log::get_instance()->write_log(3, format, ##__VA_ARGS__); Log::get_instance()->flush();}
+#define NEWLINE_SIGN    "\n"
+#define LOG_DEBUG(format, ...)   {Log::get_instance()->write_log(0, "D| %s:%d(%s)|" format "%s", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__, NEWLINE_SIGN); Log::get_instance()->flush();}
+#define LOG_INFO(format, ...)    {Log::get_instance()->write_log(1, "I| %s:%d(%s)|" format "%s", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__, NEWLINE_SIGN); Log::get_instance()->flush();}
+#define LOG_WARN(format, ...)    {Log::get_instance()->write_log(2, "W| %s:%d(%s)|" format "%s", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__, NEWLINE_SIGN); Log::get_instance()->flush();}
+#define LOG_ERROR(format, ...)   {Log::get_instance()->write_log(3, "E| %s:%d(%s)|" format "%s", __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__, NEWLINE_SIGN); Log::get_instance()->flush();}
 
 #endif

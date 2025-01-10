@@ -75,25 +75,6 @@ void Log::write_log(int level, const char *format, ...)
     time_t t = now.tv_sec;
     struct tm *sys_tm = localtime(&t);
     struct tm my_tm = *sys_tm;
-    char s[16] = {0};
-    switch (level)
-    {
-    case 0:
-        strcpy(s, "[debug]:");
-        break;
-    case 1:
-        strcpy(s, "[info]:");
-        break;
-    case 2:
-        strcpy(s, "[warn]:");
-        break;
-    case 3:
-        strcpy(s, "[erro]:");
-        break;
-    default:
-        strcpy(s, "[info]:");
-        break;
-    }
     //写入一个log，对m_count++, m_split_lines最大行数
     m_mutex.lock();
     m_count++;
@@ -130,13 +111,13 @@ void Log::write_log(int level, const char *format, ...)
     m_mutex.lock();
 
     //写入的具体时间内容格式
-    int n = snprintf(m_buf, 48, "%d-%02d-%02d %02d:%02d:%02d.%06ld %s ",
+    int n = snprintf(m_buf, 48, "%d-%02d-%02d %02d:%02d:%02d.%06ld",
                      my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday,
-                     my_tm.tm_hour, my_tm.tm_min, my_tm.tm_sec, now.tv_usec, s);
+                     my_tm.tm_hour, my_tm.tm_min, my_tm.tm_sec, now.tv_usec);
     
     int m = vsnprintf(m_buf + n, m_log_buf_size - n - 1, format, valst);
-    m_buf[n + m] = '\n';
-    m_buf[n + m + 1] = '\0';
+    // m_buf[n + m] = '\n';
+    // m_buf[n + m + 1] = '\0';
     log_str = m_buf;
 
     m_mutex.unlock();
