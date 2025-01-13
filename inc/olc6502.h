@@ -28,7 +28,7 @@ namespace nes
         uint16_t pc;    // Program Counter(PC): 程序计数器
         uint8_t status;      // Processor Status(P) 状态寄存器
 
-    private: 
+    public: 
         // Assisstive variables to facilitate emulation
         uint8_t  fetched     = 0x00;   // Represents the working input value to the ALU
         uint16_t temp        = 0x0000; // A convenience variable used everywhere

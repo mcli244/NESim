@@ -27,6 +27,7 @@ int main(int argc, char **argv)
     }
     
     nes::olc2c02 ppu;
+    ppu.reset();
     ppu.connectCartridge(&cartridge);
 
     nes::bus     mainBus;
@@ -39,7 +40,8 @@ int main(int argc, char **argv)
     nes::olc6502 cpu(&mainBus);
     cpu.reset();
     std::map<uint16_t, std::string> mapAsm;
-    mapAsm = cpu.disassemble(0x0000, 0xFFFF);
+    mapAsm = cpu.disassemble(0x8000, 0xFFFF);
+    ppu.setNMICb([&](){ cpu.nmi(); });
 
 	initscr(); 
     if(!has_colors()){
@@ -64,6 +66,7 @@ int main(int argc, char **argv)
     int addr = 0;
     while(runing)
     {
+        #if 1
         clear();
         //box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
         addr = 0x0000;
@@ -87,13 +90,15 @@ int main(int argc, char **argv)
         }
 
         mvprintw(17 + 17, 0, "############# PPU #############");
-        addr = 0x2000;
+        addr = 0x1000 + 0x6000;
         for(int i=0; i<16; i++)
         {
             mvprintw(i + 17 + 17 + 1, 0, "$%04X: ", addr);
             for(int y=0; y<16; y++)
             {
-                printw("%02X ", ppu.busRead(addr++));
+                // printw("%02X ", ppu.busRead(addr++));
+                
+                printw("%02X ", cartridge.readCHR(addr++));
             }
         }
 
@@ -117,6 +122,8 @@ int main(int argc, char **argv)
         mvprintw(index++, 60, "PPUCTRL   $%04X [%04d]", ppu.reg_ctrl.val, ppu.reg_ctrl.val);
         mvprintw(index++, 60, "PPUMASK   $%04X [%04d]", ppu.reg_mask.val, ppu.reg_mask.val);
         mvprintw(index++, 60, "PPUSTATUS $%04X [%04d]", ppu.reg_status.val, ppu.reg_status.val);
+        mvprintw(index++, 60, "PPUADDR $%04X [%04d]", ppu.reg_v.val, ppu.reg_v.val);
+        mvprintw(index++, 60, "PPUDATA $%04X [%04d]", ppu.PPUDataTmp, ppu.PPUDataTmp);
         mvprintw(index++, 60, "ScanLineCnt: %04d", ppu.ScanLineCnt);
         mvprintw(index++, 60, "PPUClockCnt: %04d", ppu.PPUClockCnt);
         index++;
@@ -152,19 +159,19 @@ int main(int argc, char **argv)
         // waddstr(stdscr,"hello,world!");//输出
         
         refresh();//逻辑屏幕的改动在物理屏幕（显示器）上显示
+        #endif
 
-        #if 0
+        #if 1
         ppu.clock();
         ppu.clock();
         ppu.clock();
 
         cpu.clock();
         //cpu.pass();
-        usleep(1*1000);
-        
+        // usleep(1*1000);
 
         cnt ++;
-        if(cnt > 100 * 400)
+        if(cnt > 100 * 400 * 1000)
         {
             cnt = 0;
             runing = false; 

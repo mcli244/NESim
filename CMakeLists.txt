@@ -8,6 +8,7 @@ set (TAGET nes_demo)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 set (EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
+SET(CMAKE_BUILD_TYPE "Debug")
 set(CXX_FLAGS "-Wall -g")
 set(CMAKE_CXX_FLAGS, "${CXX_FLAGS}")
 

@@ -40,7 +40,7 @@ namespace nes
             bool write(uint16_t addr, uint8_t value);   // 由CPU调用，地址是CPU视角的地址，内部进由卡带处理做映射到相应的内存地址
             enum CartridgeMirrorMode getMirrorMode(void);
 
-        private:
+        public:
             uint8_t readCHR(uint16_t addr);
             bool writeCHR(uint16_t addr, uint8_t value);
             uint8_t readPRG(uint16_t addr);

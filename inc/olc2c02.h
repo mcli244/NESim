@@ -1,7 +1,10 @@
 #pragma once
 #include <cstdint>
+// #include "olc6502.h"
 #include "Cartridge.h"
 #include "map.h"
+#include <functional>
+
 
 /*
     // PPU Memory Map PPU的地址线是14bit的，最大寻址空间为0x3FFF
@@ -24,6 +27,8 @@ namespace nes
             uint8_t read(uint16_t cpu_addr);
             void write(uint16_t cpu_addr, uint8_t value);
             bool connectCartridge(nes::Cartridge *cart);
+            bool setNMICb(std::function<void(void)> cb);
+            
             void reset(void);
             void clock(void);
             olc2c02();
@@ -45,6 +50,7 @@ namespace nes
             uint8_t Palette[32];
 
             nes::Cartridge *m_cart = nullptr;
+            std::function<void(void)> cpuNMICb;
             uint16_t CurrentVRAMAddress;
             uint16_t TemporaryVRAMAddress;
             uint8_t PPUDataTmp;
@@ -57,6 +63,7 @@ namespace nes
             int32_t ScanLineCnt, PPUClockCnt;
             uint16_t BgTileIndex;
             uint16_t NameTableIndex, AttributeTableIndex, TileIndexLsb, TileIndexMsb;
+            uint16_t TileIndexLsbLast, TileIndexMsbLast;
             enum PPUREG{
                 PPUCTRL	    = 0x2000,
                 PPUMASK	    = 0x2001,
@@ -70,19 +77,19 @@ namespace nes
             };
 
             // display
-            Map map = Map(128, 128);
+            Map map = Map(256, 256);
 
             // register
             union
             {
                 struct{
-                    uint8_t NameTableIndex : 2;
-                    uint8_t IncrementMode : 1;
-                    uint8_t SpritePattrenTableIndex : 1;
-                    uint8_t BackgroundPattrenTableIndex : 1;
-                    uint8_t SpriteSize : 1;
-                    uint8_t SlaveMode : 1;
-                    uint8_t EnableNMI : 1;
+                    uint8_t NameTableIndex : 2;                 // 名称表索引，(0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
+                    uint8_t IncrementMode : 1;                  // 当CPU读取或者写入PPUDATA时，VRAMaddr会自动增加。规则是：0：增加1, 1：增加32
+                    uint8_t SpritePattrenTableIndex : 1;        // Sprite pattern table address for 8x8 sprites (0: $0000; 1: $1000; ignored in 8x16 mode)
+                    uint8_t BackgroundPattrenTableIndex : 1;    // 背景使用的Pattren (0: $0000; 1: $1000)
+                    uint8_t SpriteSize : 1;                     // 精灵大小，0:8x8  1:8x16
+                    uint8_t SlaveMode : 1;                      // PPU master/slave select (0: read backdrop from EXT pins; 1: output color on EXT pins) 模拟中没使用
+                    uint8_t EnableNMI : 1;                      // Vblank NMI 使能 (0: off, 1: on)
                 };
                 uint8_t val;
             }reg_ctrl;
@@ -91,9 +98,9 @@ namespace nes
             {
                 struct{
                     uint8_t unused : 5;
-                    uint8_t SpriteOverflow : 1;
-                    uint8_t SpriteZeroHit : 1;
-                    uint8_t VerticalBlank : 1;
+                    uint8_t SpriteOverflow : 1; // Sprite 溢出标志
+                    uint8_t SpriteZeroHit : 1;  // Sprite 0 命中标志
+                    uint8_t VerticalBlank : 1;  //  Vblank 标志，读取时清除。
                 };
                 uint8_t val;
             }reg_status;
@@ -101,30 +108,17 @@ namespace nes
             union
             {
                 struct{
-                    uint8_t GrayScale : 1;
-                    uint8_t RenderBackgroundLeft : 1;
-                    uint8_t RenderSpritesLeft : 1;
-                    uint8_t RenderBackground : 1;
-                    uint8_t RenderSprites : 1;
-                    uint8_t EnhanceRed : 1;
-                    uint8_t EnhanceGreen : 1;
-                    uint8_t EnhanceBlue : 1;
-                };
+                    uint8_t GrayScale : 1;                      // 灰度（0：正常颜色，1：灰度） 
+                    uint8_t RenderBackgroundLeft : 1;           // 1：在屏幕最左边的 8 个像素显示背景，0：隐藏
+                    uint8_t RenderSpritesLeft : 1;              // 1：在屏幕最左边的 8 个像素显示精灵，0：隐藏
+                    uint8_t RenderBackground : 1;               // 1：启用背景渲染
+                    uint8_t RenderSprites : 1;                  // 1：启用精灵渲染
+                    uint8_t EnhanceRed : 1;                     // 强调红色（PAL/Dendy 上为绿色）
+                    uint8_t EnhanceGreen : 1;                   // 强调绿色（PAL/Dendy 上为红色）
+                    uint8_t EnhanceBlue : 1;                    // 强调蓝色
+                };      
                 uint8_t val;
             }reg_mask;  
-
-            union
-            {
-                struct{
-                    uint16_t coarse_x : 5;
-                    uint16_t coarse_y : 5;
-                    uint16_t nametable_x : 1;
-                    uint16_t nametable_y : 1;
-                    uint16_t fine_y : 3;
-                    uint16_t unused : 1;
-                };
-                uint16_t val;
-            }reg_addr;  
 
             union
             {
@@ -134,5 +128,48 @@ namespace nes
                 };
                 uint8_t val;
             }reg_w;
+
+            union
+            {
+                // 渲染阶段
+                struct{
+                    uint16_t coarse_x : 5;
+                    uint16_t coarse_y : 5;
+                    uint16_t nametable_x : 1;
+                    uint16_t nametable_y : 1;
+                    uint16_t fine_y : 3;
+                    uint16_t unused : 1;
+                };
+
+                // 非渲染阶段
+                uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
+            }reg_v;
+            // 请注意，虽然v寄存器有 15 位，但PPU 内存空间只有 14 位宽。最高位未用于访问$2007。
+
+            union
+            {
+                // 渲染阶段
+                struct{
+                    uint16_t coarse_x : 5;
+                    uint16_t coarse_y : 5;
+                    uint16_t nametable_x : 1;
+                    uint16_t nametable_y : 1;
+                    uint16_t fine_y : 3;
+                    uint16_t unused : 1;
+                };
+
+                // 非渲染阶段
+                uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
+            }reg_t;
+
+            union
+            {
+                struct{
+                    uint8_t FineX : 3;   
+                    uint8_t UnUsed : 5;
+                };
+                uint8_t val;
+            }reg_x;
+
     };
 }

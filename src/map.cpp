@@ -10,7 +10,7 @@ Map::Map(int width, int height)
 {
     _width = width;
     _height = height;
-    _proportion = 4;
+    _proportion = 2;
 
     _window_w = _width * _proportion;
     _window_h = _height * _proportion;

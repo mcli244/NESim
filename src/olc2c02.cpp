@@ -88,17 +88,36 @@ namespace nes
         case PPUCTRL:    break;
         case PPUMASK:    break;
         case PPUSTATUS:  
-            data = (reg_status.val & 0xE0) | (PPUDataTmp & 0x1F);
+            data = (reg_status.val & 0xE0); // 状态寄存器只有高三位有效
+            // 读取状态寄存器会清除w寄存器和VerticalBlank标志
             reg_status.VerticalBlank = 0;
             reg_w.Toggle = 0;
             break;
         case OAMADDR:    break;
         case PPUSCROLL:  break;
         case PPUADDR:    break;
-        case PPUDATA:    
-			data = PPUDataTmp;
-			PPUDataTmp = busRead(reg_addr.val);
-			reg_addr.val += (reg_ctrl.IncrementMode ? 32 : 1);
+        case PPUDATA:  
+            /*
+                从 PPUDATA 读取不会直接返回当前 VRAM 地址的值，而是返回内部读取缓冲区的内容。
+                此读取缓冲区在每次读取 PPUDATA 时都会更新，但仅在先前的内容返回到 CPU 之后才会更新，
+                从而有效地将 PPUDATA 读取延迟了一次。这是因为 PPU 总线读取太慢，无法及时完成以服务 
+                CPU 读取。由于此读取缓冲区，在通过 PPUADDR 设置 VRAM 地址后，应先读取 PPUDATA 以
+                准备读取缓冲区（忽略结果），然后再从中读取所需的数据。请注意，读取缓冲区仅在 PPUDATA 
+                读取时更新。它不受写入或其他 PPU 进程（如渲染）的影响，并且会无限期地保持其值直到下一次读取。
+            */  
+            {
+                uint8_t val = busRead(reg_v.val);    // 用内部寄存器的VRAM的当前地址读取
+                if(cpu_addr < 0x3f00)  
+                {
+                    data = PPUDataTmp;
+                    PPUDataTmp = val;
+                }
+                else    // 读取调色板数据时，不用延迟，直接返回
+                {
+                    data = val;
+                }
+                reg_v.val += (reg_ctrl.IncrementMode ? 32 : 1);
+            }
             break;
         default:
             // LOG_ERROR("addr:0x%x not supported!", addr);
@@ -139,21 +158,22 @@ namespace nes
             /* 数据总线时8bit, 地址是14bit， 所以这里要写两次。第一次写入高6位，第二次写入地8位 */
             if(reg_w.Toggle == 0)
             {
-                reg_addr.val = dat & 0x3F;
-                reg_addr.val = (reg_addr.val << 8) & 0xFF00;
+                reg_t.val &= ~0xFF00;
+                reg_t.val |= ((dat & 0x3F) << 8);
                 reg_w.Toggle = 1;
             }
             else
             {
-                reg_addr.val |= dat & 0xFF;
+                reg_t.val &= ~0x00FF;
+                reg_t.val |= (dat & 0xFF);
+                reg_v.val = reg_t.val;
                 reg_w.Toggle = 0;
             }
-            LOG_DEBUG("reg_addr:0x%x", reg_addr.val);
+            LOG_DEBUG("reg_v:0x%x", reg_v.val);
             break;
         case PPUDATA:    
-            busWrite(reg_addr.val, dat);
-            reg_addr.val += (reg_ctrl.IncrementMode ? 32 : 1);  // 自动增长
-            PPUDataTmp = dat;   // 记录最近一次写入的数据，再读取状态寄存器时会用上。因为reg_addr.va自增了，所以不用地址重新读取了。
+            busWrite(reg_v.val, dat);
+            reg_v.val += (reg_ctrl.IncrementMode ? 32 : 1);  // 自动增长
             break;
         default:
             LOG_ERROR("addr:0x%x not supported!", cpu_addr);
@@ -312,12 +332,15 @@ namespace nes
     void olc2c02::reset(void)
     {
         reg_ctrl.val = 0;
-        reg_addr.val = 0;
         reg_mask.val = 0;
         reg_status.val = 0;
         reg_w.val = 0;
+        reg_t.val = 0;
         ScanLineCnt = -1;
         PPUClockCnt = 0;
+        PPUDataTmp = 0;
+        ScrollPosition.x = 0;
+        ScrollPosition.y = 0;
     }
 
     void olc2c02::DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex)
@@ -389,8 +412,12 @@ namespace nes
     bool olc2c02::connectCartridge(nes::Cartridge *cart)
     {
         m_cart = cart;
-        // DrawAllTile(1);
     }   
+    
+    bool olc2c02::setNMICb(std::function<void(void)> cb)
+    {
+        cpuNMICb = cb;
+    }
 
     void olc2c02::clock(void)
     {
@@ -398,11 +425,35 @@ namespace nes
 
         if(ScanLineCnt == -1 || ScanLineCnt == 261)
         {
+            /*
+                这是一条虚拟扫描线，其唯一目的是用下一条扫描线的前两个图块的数据填充移位寄存器。
+                尽管这条扫描线没有渲染任何像素，但 PPU仍会像常规扫描线一样进行内存访问，使用 
+                PPU 的V 寄存器的当前值，对于精灵提取，使用当前处于次级 OAM 中的任何数据（例如，
+                来自上一帧的 扫描线 239 的精灵评估结果）。此扫描线的长度会有所不同，具体取决于
+                渲染的是偶数帧还是奇数帧。对于奇数帧，扫描线末尾的循环会被跳过（这是通过从 (339,261) 
+                直接跳转到 (0,0) 内部完成的，用最后一个虚拟名称表提取的最后一个标记替换第一个
+                可见扫描线开头的空闲标记）。对于偶数帧，最后一个循环会正常发生。这样做是为了弥补
+                PPU 物理输出视频信号方式的一些缺点，最终结果是当屏幕不滚动时图像更清晰。但是，
+                可以通过保持渲染禁用直到此扫描线通过后再绕过此行为，这会导致图像具有“点爬行”效果，
+                类似于但不完全像隔行视频中看到的那样。在此扫描线的 280 到 304 像素期间，如果启用了
+                渲染，则重新加载垂直滚动位。
+            */
+
             if(PPUClockCnt == 1)
             {
                 reg_status.VerticalBlank = 0;
 			    reg_status.SpriteOverflow = 0;
 			    reg_status.SpriteZeroHit = 0;
+            }
+            else if(PPUClockCnt>=321 && PPUClockCnt <= 336)   // 321-336
+            {
+                /*  在这里，获取下一个扫描线的前两个图块，并将其加载到移位寄存器中。同样，每次内存访问需要 2 个 PPU 周期才能完成，而两个图块需要执行 4 个周期：
+                    名称表字节
+                    属性表字节
+                    图案桌瓷砖低
+                    图案表图块高位（图案表图块低位 +8 个字节）
+                */
+
             }
         }
         else if(ScanLineCnt >= 0 && ScanLineCnt <= 239)   // 正常图片显示周期， PPU不停在读取内存数据，所以CPU不要访问PPU内存。
@@ -413,16 +464,18 @@ namespace nes
             }
             else if(PPUClockCnt <= 256)
             {
-                switch (PPUClockCnt % 8)
+                switch ((PPUClockCnt-1) % 8)
                 {
-                case 1: // read NameTable, 用于决定使用那一块Pattern
+                case 0: // read NameTable, 用于决定使用那一块Pattern
                     /*
                     $0000-$0FFF	$1000	Pattern table 0	Cartridge
                     $1000-$1FFF	$1000	Pattern table 1	Cartridge
                     */
-                    BgTileIndex = busRead(0x2000 | reg_addr.val & 0x0FFF);  // reg_addr是CPU设置的
+                    BgTileIndex = busRead(0x2000 | reg_v.val & 0x0FFF);  // reg_addr是CPU设置的
+                    // LOG_INFO("BgTileIndex:%d", BgTileIndex);
+                    // DrawTile(reg_ctrl.BackgroundPattrenTableIndex, BgTileIndex);
                     break;
-                case 3: // read AttributeTable
+                case 2: // read AttributeTable
                     /*
                         $2000-$23FF	$0400	Nametable 0	Cartridge
                             $2000 - $23BF   NameTable 0
@@ -464,39 +517,96 @@ namespace nes
                     需要得到本次像素，在VRAM中的具体的地址
                     1. reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000 :先得到是哪一块PattrenTable
                     2. NameTableIndex * 8 :得到本次像素所在的NameTableIndex, *16是因为一个Tile用16Byte保存，NameTableIndex是索引
-                    3. reg_addr.fine_y :是本次像素在Tile中所在的行，Tile每行8bit构成
+                    3. reg_v.fine_y :是本次像素在Tile中所在的行，Tile每行8bit构成
                     */
-                case 5:
+                case 4:
                     TileIndexLsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
-                                            | reg_addr.fine_y);     // reg_addr由于CPU设置
+                                            | ScrollPosition.y);     // reg_addr由于CPU设置
                     break;
-                case 7:
+                case 6:
                     TileIndexMsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
-                                            | reg_addr.fine_y + 8); // reg_addr由于CPU设置
+                                            | ScrollPosition.y + 8); // reg_addr由于CPU设置
                     break;   
+                case 7:
+                    {
+                        uint8_t tile_msb = TileIndexMsb;
+                        uint8_t tile_lsb = TileIndexLsb;
+                        LOG_INFO("tile_msb:0x%x tile_lsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d BgTileIndex:%d reg_v.val:0x%x reg_ctrl.BackgroundPattrenTableIndex:%d", 
+                            tile_msb, tile_lsb, ScrollPosition.x, ScrollPosition.y, BgTileIndex, reg_v.val, reg_ctrl.BackgroundPattrenTableIndex);
+                        for(uint8_t col=0; col<8; col++)
+                        {
+                            uint8_t pixel = ((tile_msb & 0x01) << 1) | (tile_lsb & 0x01);
+                            tile_lsb >>= 1;
+                            tile_msb >>= 1;
+                            uint8_t pixel_x = PPUClockCnt + (7 - col);
+                            uint8_t pixel_y = ScanLineCnt;
+                            switch (pixel)
+                            {
+                            case 0: map.DrawPoint(pixel_x, pixel_y, 0); break;
+                            case 1: map.DrawPoint(pixel_x, pixel_y, 63); break;
+                            case 2: map.DrawPoint(pixel_x, pixel_y, 127); break;
+                            case 3: map.DrawPoint(pixel_x, pixel_y, 255); break;
+                            default:
+                                LOG_ERROR("tmp:0x%x", pixel);
+                                break;
+                            }
+                        }
+                        // map.Refresh();
+                    }
+                    break;
                 default:
                     break;
                 };
 
                 /* 这里没有获取颜色 */
-                uint8_t offset = (PPUClockCnt - 1) % 8;
-                uint8_t pixel = (((TileIndexMsb >> offset) & 0x01) << 1) | ((TileIndexLsb >> offset) & 0x01);
-                // LOG_INFO("offset:0x%x pixel:0x%x PPUClockCnt:%d ScanLineCnt:%d BgTileIndex:%d TileIndexLsb:0x%x TileIndexMsb:0x%x", 
-                //     offset, pixel, PPUClockCnt, ScanLineCnt, BgTileIndex, TileIndexLsb, TileIndexMsb);
-                switch (pixel)
-                {
-                case 0: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 0); break;
-                case 1: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 63); break;
-                case 2: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 127); break;
-                case 3: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 255); break;
-                default:
-                    LOG_ERROR("tmp:0x%x", pixel);
-                    break;
-                }
+                // uint8_t offset = (PPUClockCnt - 1) % 8;
+                // uint8_t pixel = (((TileIndexMsb >> offset) & 0x01) << 1) | ((TileIndexLsb >> offset) & 0x01);
+                // // LOG_INFO("offset:0x%x pixel:0x%x PPUClockCnt:%d ScanLineCnt:%d BgTileIndex:%d TileIndexLsb:0x%x TileIndexMsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d", 
+                // //     offset, pixel, PPUClockCnt, ScanLineCnt, BgTileIndex, TileIndexLsb, TileIndexMsb, ScrollPosition.x, ScrollPosition.y);
+                // switch (pixel)
+                // {
+                // case 0: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 0); break;
+                // case 1: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 63); break;
+                // case 2: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 127); break;
+                // case 3: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 255); break;
+                // default:
+                //     LOG_ERROR("tmp:0x%x", pixel);
+                //     break;
+                // }
+                // map.Refresh();
             }
-            else
+            else if(PPUClockCnt <= 320)   // 257-320
+            {
+                /*
+                    下一个扫描线上的精灵的图块数据在此处获取。同样，每次内存访问需要 2 个 PPU 周期才能完成，并且对 8 个精灵中的每一个执行 4 个周期：
+                    垃圾名称表字节
+                    垃圾名称表字节
+                    图案桌瓷砖低
+                    图案表图块高位（图案表图块低位 +8 个字节）
+                    发生垃圾提取，以便执行 BG 图块提取的相同电路可以重新用于精灵图块提取。
+                    如果下一个扫描线上的精灵少于 8 个，则由于次级 OAM 中有虚拟精灵数据（请参阅精灵评估），剩余的精灵将对图块 $FF 进行虚拟提取。然后丢弃此数据，并用一组透明的值加载精灵。
+                    除此之外，每个精灵的 X 位置和属性都会从辅助 OAM 加载到各自的计数器/锁存器中。这发生在第二次垃圾名称表提取期间，属性字节在第一个刻度期间加载，X 坐标在第二个刻度期间加载。
+                */
+            }
+            else if(PPUClockCnt <= 336)   // 321-336
+            {
+                /*  在这里，获取下一个扫描线的前两个图块，并将其加载到移位寄存器中。同样，每次内存访问需要 2 个 PPU 周期才能完成，而两个图块需要执行 4 个周期：
+                    名称表字节
+                    属性表字节
+                    图案桌瓷砖低
+                    图案表图块高位（图案表图块低位 +8 个字节）
+                */
+            }
+            else if(PPUClockCnt <= 340)// 337-340
+            {
+                /*  提取了两个字节，但目的未知。每次提取都需要 2 个 PPU 周期。
+                    名称表字节
+                    名称表字节
+                    这里获取的两个字节都是将在下一个扫描线（即图块 3）开头获取的同一个名称表字节。已知至少一个映射器（MMC5）使用这串连续的三个名称表获取来计时扫描线计数器。
+                */
+            }
             {
                 
             }
@@ -514,6 +624,7 @@ namespace nes
                 if(reg_ctrl.EnableNMI)
                 {
                     // 通知CPU NMI中断
+                    cpuNMICb();
                 }
             }
         }
@@ -522,19 +633,19 @@ namespace nes
 
         }
 
+        PPUClockCnt ++;
         if(PPUClockCnt >= 341)
         {
             PPUClockCnt = 0;
-
             if(ScanLineCnt >= 261)
             {
                 ScanLineCnt = -1;  // 一帧完成
                 map.Refresh();
+                LOG_INFO("map.Refresh");
             }
             else
                 ScanLineCnt ++;
         }
-        PPUClockCnt ++;
     }
 }
 
