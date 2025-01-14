@@ -161,7 +161,7 @@ int main(int argc, char **argv)
         refresh();//逻辑屏幕的改动在物理屏幕（显示器）上显示
         #endif
 
-        #if 1
+        #if 0
         ppu.clock();
         ppu.clock();
         ppu.clock();
@@ -169,14 +169,21 @@ int main(int argc, char **argv)
         cpu.clock();
         //cpu.pass();
         // usleep(1*1000);
-
-        cnt ++;
-        if(cnt > 100 * 400 * 1000)
+        
+        // cnt ++;
+        // if(cnt > 100 * 400 * 1000)
+        // {
+        //     cnt = 0;
+        //     runing = false; 
+        //     break;
+        // }
+        if(cpu.clock_count >= 4496751)
         {
-            cnt = 0;
-            runing = false; 
-            break;
+            printf("cpu.clock_count :%d\r\n", cpu.clock_count);
+            sleep(3);
+            return 0;
         }
+
         #else
         
         char input = getch();

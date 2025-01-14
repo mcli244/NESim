@@ -51,8 +51,6 @@ namespace nes
 
             nes::Cartridge *m_cart = nullptr;
             std::function<void(void)> cpuNMICb;
-            uint16_t CurrentVRAMAddress;
-            uint16_t TemporaryVRAMAddress;
             uint8_t PPUDataTmp;
 
             struct{
@@ -127,7 +125,25 @@ namespace nes
                     uint8_t UnUsed : 7;
                 };
                 uint8_t val;
-            }reg_w;
+            }reg_w; // 每次写入PPUSCROLL或PPUADDR时切换，指示这是第一次还是第二次写入。读取PPUSTATUS时清除。有时称为“写入锁存器”或“写入切换”。
+
+            
+            union
+            {
+                // 渲染阶段
+                struct{
+                    uint16_t coarse_x : 5;
+                    uint16_t coarse_y : 5;
+                    uint16_t nametable_x : 1;
+                    uint16_t nametable_y : 1;
+                    uint16_t fine_y : 3;
+                    uint16_t unused : 1;
+                };
+
+                // 非渲染阶段
+                uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
+            }reg_v; //渲染期间，用于滚动位置。渲染之外，用作当前 VRAM 地址。
+            
 
             union
             {
@@ -143,25 +159,9 @@ namespace nes
 
                 // 非渲染阶段
                 uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
-            }reg_v;
-            // 请注意，虽然v寄存器有 15 位，但PPU 内存空间只有 14 位宽。最高位未用于访问$2007。
+            }reg_t; // 在渲染期间，指定下一个扫描线的起始粗 x 滚动和屏幕的起始 y 滚动。在渲染之外，在将滚动或 VRAM 地址传输到 v 之前保存它。
 
-            union
-            {
-                // 渲染阶段
-                struct{
-                    uint16_t coarse_x : 5;
-                    uint16_t coarse_y : 5;
-                    uint16_t nametable_x : 1;
-                    uint16_t nametable_y : 1;
-                    uint16_t fine_y : 3;
-                    uint16_t unused : 1;
-                };
-
-                // 非渲染阶段
-                uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
-            }reg_t;
-
+            
             union
             {
                 struct{
@@ -169,7 +169,7 @@ namespace nes
                     uint8_t UnUsed : 5;
                 };
                 uint8_t val;
-            }reg_x;
-
+            }reg_x; // 当前滚动的精细 x 位置，与 v 一起渲染时使用。
+            
     };
 }

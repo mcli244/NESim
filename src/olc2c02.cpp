@@ -72,7 +72,6 @@ namespace nes
         memset(&NameTable[1], 0, 1024);
 
         memset(&Palette, 0, 32);
-        reset();
     };
 
     olc2c02::~olc2c02()
@@ -473,7 +472,7 @@ namespace nes
                     */
                     BgTileIndex = busRead(0x2000 | reg_v.val & 0x0FFF);  // reg_addr是CPU设置的
                     // LOG_INFO("BgTileIndex:%d", BgTileIndex);
-                    // DrawTile(reg_ctrl.BackgroundPattrenTableIndex, BgTileIndex);
+                    //DrawTile(reg_ctrl.BackgroundPattrenTableIndex, BgTileIndex);
                     break;
                 case 2: // read AttributeTable
                     /*
@@ -533,8 +532,8 @@ namespace nes
                     {
                         uint8_t tile_msb = TileIndexMsb;
                         uint8_t tile_lsb = TileIndexLsb;
-                        LOG_INFO("tile_msb:0x%x tile_lsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d BgTileIndex:%d reg_v.val:0x%x reg_ctrl.BackgroundPattrenTableIndex:%d", 
-                            tile_msb, tile_lsb, ScrollPosition.x, ScrollPosition.y, BgTileIndex, reg_v.val, reg_ctrl.BackgroundPattrenTableIndex);
+                        // LOG_INFO("tile_msb:0x%x tile_lsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d BgTileIndex:%d reg_v.val:0x%x reg_ctrl.BackgroundPattrenTableIndex:%d", 
+                        //     tile_msb, tile_lsb, ScrollPosition.x, ScrollPosition.y, BgTileIndex, reg_v.val, reg_ctrl.BackgroundPattrenTableIndex);
                         for(uint8_t col=0; col<8; col++)
                         {
                             uint8_t pixel = ((tile_msb & 0x01) << 1) | (tile_lsb & 0x01);
