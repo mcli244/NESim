@@ -28,6 +28,7 @@ namespace nes
             void write(uint16_t cpu_addr, uint8_t value);
             bool connectCartridge(nes::Cartridge *cart);
             bool setNMICb(std::function<void(void)> cb);
+            uint32_t getColor(uint8_t index);
             
             void reset(void);
             void clock(void);
@@ -41,6 +42,7 @@ namespace nes
             uint8_t busWrite(uint16_t ppu_addr, uint8_t dat);
             void DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex);
             void DrawAllTile(uint8_t PatternTableIndex);
+            uint8_t getPaletteIndex();
         
         public: // TODO: 测试需要外部访问寄存器，正式版本需要改为private
             /* VARM */
@@ -53,13 +55,19 @@ namespace nes
             std::function<void(void)> cpuNMICb;
             uint8_t PPUDataTmp;
 
+            bool oddFrame;
+            uint8_t fine_x;
+
+            /* Fixed color */
+            uint32_t PixelColor[64];    // RGB
+
             struct{
                 uint8_t x;
                 uint8_t y;
             }ScrollPosition;
             
             int32_t ScanLineCnt, PPUClockCnt;
-            uint16_t BgTileIndex;
+            uint16_t BgTileIndex, PaletteIndex;
             uint16_t NameTableIndex, AttributeTableIndex, TileIndexLsb, TileIndexMsb;
             uint16_t TileIndexLsbLast, TileIndexMsbLast;
             enum PPUREG{
@@ -131,16 +139,27 @@ namespace nes
             union
             {
                 // 渲染阶段
+                /*
+                    一帧图像，由32X30和tile块组成
+                    yyy NN YYYYY XXXXX
+                    ||| || ||||| +++++-- 粗 X 滚动, 指横向的32块tile的索引 0 - 31
+                    ||| || +++++-------- 粗 Y 滚动, 指纵向的30块tile的索引 0 - 29
+                    ||| ++-------------- 名称表选择
+                    +++----------------- 精细 Y 滚动，指tile内部的像素在本tile（8x8）的行索引 0-7
+                    注意：渲染阶段本寄存器的各个位是由PPU自己控制的，PPU根据时钟去更新这些值
+                    例如：PPU时钟每增加8，择粗X+1，用以指向下一个tile，PPU扫描线每增加8，择粗Y+1指向下一个tile
+                    PS:就是把一张图按tile分为32x30的图块，然后给tile赋予坐标
+                */
                 struct{
-                    uint16_t coarse_x : 5;
-                    uint16_t coarse_y : 5;
-                    uint16_t nametable_x : 1;
-                    uint16_t nametable_y : 1;
-                    uint16_t fine_y : 3;
-                    uint16_t unused : 1;
+                    uint16_t coarse_x : 5;      // bit[0-4] 粗 X 滚动
+                    uint16_t coarse_y : 5;      // bit[5-9] 粗 Y 滚动
+                    uint16_t nametable : 2;     // bit[10-11] 名称表选择
+                    uint16_t fine_y : 3;        // bit[12-14] 精细 Y 滚动
+                    uint16_t unused : 1;        // bit15 控制背景滚动时，Name Table 的垂直方向切换 0: 当前垂直 Name Table 的第一部分 1: 当前垂直 Name Table 的第二部分
                 };
 
                 // 非渲染阶段
+                // 该阶段由CPU对本寄存器进行操作，在PPUDATA被读写时，本寄存器和t寄存器会进行自动累加
                 uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
             }reg_v; //渲染期间，用于滚动位置。渲染之外，用作当前 VRAM 地址。
             
@@ -151,8 +170,7 @@ namespace nes
                 struct{
                     uint16_t coarse_x : 5;
                     uint16_t coarse_y : 5;
-                    uint16_t nametable_x : 1;
-                    uint16_t nametable_y : 1;
+                    uint16_t nametable: 2;
                     uint16_t fine_y : 3;
                     uint16_t unused : 1;
                 };

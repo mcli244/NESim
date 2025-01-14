@@ -72,12 +72,93 @@ namespace nes
         memset(&NameTable[1], 0, 1024);
 
         memset(&Palette, 0, 32);
+
+        auto ColorMux = [&](uint8_t r, uint8_t g, uint8_t b) 
+        {
+            uint32_t color = 0;
+            color = (r << 16) | (g << 8) | (b); // 使用按位或
+            return color;
+        };
+
+    
+        PixelColor[0x00] = ColorMux(84, 84, 84);
+        PixelColor[0x01] = ColorMux(0, 30, 116);
+        PixelColor[0x02] = ColorMux(8, 16, 144);
+        PixelColor[0x03] = ColorMux(48, 0, 136);
+        PixelColor[0x04] = ColorMux(68, 0, 100);
+        PixelColor[0x05] = ColorMux(92, 0, 48);
+        PixelColor[0x06] = ColorMux(84, 4, 0);
+        PixelColor[0x07] = ColorMux(60, 24, 0);
+        PixelColor[0x08] = ColorMux(32, 42, 0);
+        PixelColor[0x09] = ColorMux(8, 58, 0);
+        PixelColor[0x0A] = ColorMux(0, 64, 0);
+        PixelColor[0x0B] = ColorMux(0, 60, 0);
+        PixelColor[0x0C] = ColorMux(0, 50, 60);
+        PixelColor[0x0D] = ColorMux(0, 0, 0);
+        PixelColor[0x0E] = ColorMux(0, 0, 0);
+        PixelColor[0x0F] = ColorMux(0, 0, 0);
+
+        PixelColor[0x10] = ColorMux(152, 150, 152);
+        PixelColor[0x11] = ColorMux(8, 76, 196);
+        PixelColor[0x12] = ColorMux(48, 50, 236);
+        PixelColor[0x13] = ColorMux(92, 30, 228);
+        PixelColor[0x14] = ColorMux(136, 20, 176);
+        PixelColor[0x15] = ColorMux(160, 20, 100);
+        PixelColor[0x16] = ColorMux(152, 34, 32);
+        PixelColor[0x17] = ColorMux(120, 60, 0);
+        PixelColor[0x18] = ColorMux(84, 90, 0);
+        PixelColor[0x19] = ColorMux(40, 114, 0);
+        PixelColor[0x1A] = ColorMux(8, 124, 0);
+        PixelColor[0x1B] = ColorMux(0, 118, 40);
+        PixelColor[0x1C] = ColorMux(0, 102, 120);
+        PixelColor[0x1D] = ColorMux(0, 0, 0);
+        PixelColor[0x1E] = ColorMux(0, 0, 0);
+        PixelColor[0x1F] = ColorMux(0, 0, 0);
+
+        PixelColor[0x20] = ColorMux(236, 238, 236);
+        PixelColor[0x21] = ColorMux(76, 154, 236);
+        PixelColor[0x22] = ColorMux(120, 124, 236);
+        PixelColor[0x23] = ColorMux(176, 98, 236);
+        PixelColor[0x24] = ColorMux(228, 84, 236);
+        PixelColor[0x25] = ColorMux(236, 88, 180);
+        PixelColor[0x26] = ColorMux(236, 106, 100);
+        PixelColor[0x27] = ColorMux(212, 136, 32);
+        PixelColor[0x28] = ColorMux(160, 170, 0);
+        PixelColor[0x29] = ColorMux(116, 196, 0);
+        PixelColor[0x2A] = ColorMux(76, 208, 32);
+        PixelColor[0x2B] = ColorMux(56, 204, 108);
+        PixelColor[0x2C] = ColorMux(56, 180, 204);
+        PixelColor[0x2D] = ColorMux(60, 60, 60);
+        PixelColor[0x2E] = ColorMux(0, 0, 0);
+        PixelColor[0x2F] = ColorMux(0, 0, 0);
+
+        PixelColor[0x30] = ColorMux(236, 238, 236);
+        PixelColor[0x31] = ColorMux(168, 204, 236);
+        PixelColor[0x32] = ColorMux(188, 188, 236);
+        PixelColor[0x33] = ColorMux(212, 178, 236);
+        PixelColor[0x34] = ColorMux(236, 174, 236);
+        PixelColor[0x35] = ColorMux(236, 174, 212);
+        PixelColor[0x36] = ColorMux(236, 180, 176);
+        PixelColor[0x37] = ColorMux(228, 196, 144);
+        PixelColor[0x38] = ColorMux(204, 210, 120);
+        PixelColor[0x39] = ColorMux(180, 222, 120);
+        PixelColor[0x3A] = ColorMux(168, 226, 144);
+        PixelColor[0x3B] = ColorMux(152, 226, 180);
+        PixelColor[0x3C] = ColorMux(160, 214, 228);
+        PixelColor[0x3D] = ColorMux(160, 162, 160);
+        PixelColor[0x3E] = ColorMux(0, 0, 0);
+        PixelColor[0x3F] = ColorMux(0, 0, 0);
     };
 
     olc2c02::~olc2c02()
     {
         m_cart = nullptr;
     };
+
+    uint32_t olc2c02::getColor(uint8_t index)
+    {
+        return PixelColor[index&0x3F];
+    }
 
     uint8_t olc2c02::read(uint16_t cpu_addr)
     {   
@@ -132,6 +213,7 @@ namespace nes
         {
         case PPUCTRL:    
             reg_ctrl.val = dat;
+            reg_t.nametable = reg_ctrl.NameTableIndex;
             break;
         case PPUMASK:    
             reg_mask.val = dat;  
@@ -144,12 +226,14 @@ namespace nes
             // PPUSCROLL 需要两次写入：第一次是 X 滚动，第二次是 Y 滚动。
             if(reg_w.Toggle == 0)
             {
-                ScrollPosition.x = dat;
+                fine_x = dat & 0x07;
+                reg_t.coarse_x = dat >> 3;
                 reg_w.Toggle = 1;
             }
             else
             {
-                ScrollPosition.y = dat;
+                reg_t.fine_y = dat & 0x07;
+                reg_t.coarse_y = dat >> 3;
                 reg_w.Toggle = 0;
             }
             break;
@@ -168,7 +252,6 @@ namespace nes
                 reg_v.val = reg_t.val;
                 reg_w.Toggle = 0;
             }
-            LOG_DEBUG("reg_v:0x%x", reg_v.val);
             break;
         case PPUDATA:    
             busWrite(reg_v.val, dat);
@@ -266,8 +349,8 @@ namespace nes
                     SAAPP
                     |||||
                     |||++- tile pattern的像素值
-                    |++--- attributes中的调色板编号
-                    +----- 背景/精灵的选择
+                    |++--- attributes中的调色板编号 0-4
+                    +----- 背景0/精灵1的选择
                 6. 颜色数据放哪里？ 
                     - 颜色由NES硬件固化的编码，总共64中颜色。
                     - 这些颜色由6bit(RGB:222)组成
@@ -338,8 +421,7 @@ namespace nes
         ScanLineCnt = -1;
         PPUClockCnt = 0;
         PPUDataTmp = 0;
-        ScrollPosition.x = 0;
-        ScrollPosition.y = 0;
+        oddFrame = false;
     }
 
     void olc2c02::DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex)
@@ -421,7 +503,7 @@ namespace nes
     void olc2c02::clock(void)
     {
         // 262scanline、341clock 这里完全按照2c02的硬件行为做处理
-
+        
         if(ScanLineCnt == -1 || ScanLineCnt == 261)
         {
             /*
@@ -463,7 +545,8 @@ namespace nes
             }
             else if(PPUClockCnt <= 256)
             {
-                switch ((PPUClockCnt-1) % 8)
+                uint8_t offset = (PPUClockCnt-1) % 8;
+                switch (offset)
                 {
                 case 0: // read NameTable, 用于决定使用那一块Pattern
                     /*
@@ -471,28 +554,85 @@ namespace nes
                     $1000-$1FFF	$1000	Pattern table 1	Cartridge
                     */
                     BgTileIndex = busRead(0x2000 | reg_v.val & 0x0FFF);  // reg_addr是CPU设置的
-                    // LOG_INFO("BgTileIndex:%d", BgTileIndex);
-                    //DrawTile(reg_ctrl.BackgroundPattrenTableIndex, BgTileIndex);
                     break;
                 case 2: // read AttributeTable
                     /*
-                        $2000-$23FF	$0400	Nametable 0	Cartridge
-                            $2000 - $23BF   NameTable 0
-                            $23C0 - $23FF   AttributeTable 0
-                        $2400-$27FF	$0400	Nametable 1	Cartridge
-                            $2400 - $27BF   NameTable 1
-                            $27C0 - $27FF   AttributeTable 1
-                        $2800-$2BFF	$0400	Nametable 2	Cartridge
-                            $2800 - $2BBF   NameTable 2
-                            $28C0 - $2BFF   AttributeTable 2
-                        $2C00-$2FFF	$0400	Nametable 3	Cartridge
-                            $2C00 - $2FBF   NameTable 3
-                            $2FC0 - $2FFF   AttributeTable 3
+                        $2000-$23FF	$0400	1024B   Nametable 0	Cartridge
+                            $2000 - $23BF   960B    NameTable 0
+                            $23C0 - $23FF   64B     AttributeTable 0
+                        $2400-$27FF	$0400	1024B   Nametable 1	Cartridge
+                            $2400 - $27BF   960B    NameTable 1
+                            $27C0 - $27FF   64B     AttributeTable 1
+                        $2800-$2BFF	$0400	1024B   Nametable 2	Cartridge
+                            $2800 - $2BBF   960B    NameTable 2
+                            $28C0 - $2BFF   64B     AttributeTable 2
+                        $2C00-$2FFF	$0400	1024B   Nametable 3	Cartridge
+                            $2C00 - $2FBF   960B    NameTable 3
+                            $2FC0 - $2FFF   64B     AttributeTable 3
+
+                        AttributeTable用64B去表示图块的调色盘
+                        一个字节可以表示4x4个tile图块的调色盘，每个tile由8x8像素组成，故AttributeTable的一个字节表示16x16像素区域的调色盘。
+                        Byte: 76543210
+                              ||||||||
+                              ||||||++---- 左上（TL）
+                              ||||++------ 右上（TR）
+                              ||++-------- 左下（BL）
+                              ++---------- 右下（BR）
+                        +----+----+----+----+
+                        | TL | TL | TR | TR |
+                        +----+----+----+----+
+                        | TL | TL | TR | TR |       +-----+
+                        +----+----+----+----+   ==> | ATB |
+                        | BL | BL | BR | BR |       +-----+
+                        +----+----+----+----+
+                        | BL | BL | BR | BR |
+                        +----+----+----+----+
+                        例：AttributeTable Byte:0b11100100
+                                                  ||||||||
+                                                  ||||||++---- 左上（TL）: 00 调色盘0
+                                                  ||||++------ 右上（TR）: 01 调色盘1
+                                                  ||++-------- 左下（BL）：10 调色盘2
+                                                  ++---------- 右下（BR）：11 调色盘3
+                        一帧图片组成 8x8个ATB, 每个ATB用一个Byte表示，共计64Bytes
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
+                        | ATB | ATB | ATB | ATB | ATB | ATB | ATB | ATB |
+                        +-----+-----+-----+-----+-----+-----+-----+-----+
                     */
-                    // 主要是提取AttributeTable中的调色板
-                    // BgTileIndex = busRead(reg_ctrl.NameTableIndex * 0x400 + 0x3C0);  // TODO: reg_addr是CPU设置的
+                    {
+                        // 提取当前像素所在的属性表中的位置
+                        uint8_t AttributeTableByte = busRead(0x23C0 
+                                                            | reg_v.nametable * 0x400 
+                                                            | reg_v.coarse_y * 8
+                                                            | reg_v.coarse_x);
+                        // 提取当前像素的调色盘
+                        uint8_t tx = (ScanLineCnt % 16);
+                        uint8_t ty = ((PPUClockCnt-1) % 16);
+                        uint8_t offset_t = 0;
+                        if(tx < 8) {
+                            if(ty < 8)  offset_t = 0;   // TL
+                            else        offset_t = 4;   // BL
+                        } else {
+                            if(ty < 8)  offset_t = 2;   // TR
+                            else        offset_t = 6;   // BR
+                        }
+                        PaletteIndex =  (AttributeTableByte >> offset_t) & 0x03;
+                    }
                     break;
-                /*
+                    /*
                     -------------------------------------------------------------------------------------------
                     单个Tile的组成，Tile是一个8x8的像素点阵，每个像素由2bit组成，也就是4种灰度， 00， 01， 10， 11。
                     Byte00    0 0 0 0 0 0 0 0         Byte08  0 0 0 0 0 0 0 0      00 00 00 00 00 00 00 00
@@ -521,60 +661,77 @@ namespace nes
                 case 4:
                     TileIndexLsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
-                                            | ScrollPosition.y);     // reg_addr由于CPU设置
+                                            | reg_v.fine_y);     // reg_addr由于CPU设置
                     break;
                 case 6:
                     TileIndexMsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
-                                            | ScrollPosition.y + 8); // reg_addr由于CPU设置
+                                            | reg_v.fine_y + 8); // reg_addr由于CPU设置
                     break;   
                 case 7:
+                    // 渲染完8个像素要切换一下tile
+                    if (reg_v.coarse_x == 31)
                     {
-                        uint8_t tile_msb = TileIndexMsb;
-                        uint8_t tile_lsb = TileIndexLsb;
-                        // LOG_INFO("tile_msb:0x%x tile_lsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d BgTileIndex:%d reg_v.val:0x%x reg_ctrl.BackgroundPattrenTableIndex:%d", 
-                        //     tile_msb, tile_lsb, ScrollPosition.x, ScrollPosition.y, BgTileIndex, reg_v.val, reg_ctrl.BackgroundPattrenTableIndex);
-                        for(uint8_t col=0; col<8; col++)
-                        {
-                            uint8_t pixel = ((tile_msb & 0x01) << 1) | (tile_lsb & 0x01);
-                            tile_lsb >>= 1;
-                            tile_msb >>= 1;
-                            uint8_t pixel_x = PPUClockCnt + (7 - col);
-                            uint8_t pixel_y = ScanLineCnt;
-                            switch (pixel)
-                            {
-                            case 0: map.DrawPoint(pixel_x, pixel_y, 0); break;
-                            case 1: map.DrawPoint(pixel_x, pixel_y, 63); break;
-                            case 2: map.DrawPoint(pixel_x, pixel_y, 127); break;
-                            case 3: map.DrawPoint(pixel_x, pixel_y, 255); break;
-                            default:
-                                LOG_ERROR("tmp:0x%x", pixel);
-                                break;
-                            }
-                        }
-                        // map.Refresh();
+                        reg_v.coarse_x = 0; // 下一行的第0个tile
+                        // reg_v.nametable_x = ~reg_v.nametable_x; // TODO: 切换名称表
+                        reg_v.nametable = reg_v.nametable ^ 0x01;
+
+                    }
+                    else
+                    {
+                        reg_v.coarse_x++;
                     }
                     break;
                 default:
                     break;
                 };
 
-                /* 这里没有获取颜色 */
-                // uint8_t offset = (PPUClockCnt - 1) % 8;
-                // uint8_t pixel = (((TileIndexMsb >> offset) & 0x01) << 1) | ((TileIndexLsb >> offset) & 0x01);
-                // // LOG_INFO("offset:0x%x pixel:0x%x PPUClockCnt:%d ScanLineCnt:%d BgTileIndex:%d TileIndexLsb:0x%x TileIndexMsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d", 
-                // //     offset, pixel, PPUClockCnt, ScanLineCnt, BgTileIndex, TileIndexLsb, TileIndexMsb, ScrollPosition.x, ScrollPosition.y);
-                // switch (pixel)
-                // {
-                // case 0: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 0); break;
-                // case 1: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 63); break;
-                // case 2: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 127); break;
-                // case 3: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 255); break;
-                // default:
-                //     LOG_ERROR("tmp:0x%x", pixel);
-                //     break;
-                // }
-                // map.Refresh();
+                // 在这里的1-256的clock中，每一个PPUClock渲染一个像素点，既一行数据
+                int x, y;
+                x = PPUClockCnt - 1;    // 屏幕:0-255 . PPUClockCnt: 1-256
+                y = ScanLineCnt;        // 屏幕:0-239 . ScanLineCnt: 0-239
+
+                uint8_t tile_pattern_val;
+
+                // TileIndexMsb     |    TileIndexLsb
+                // 0 1 2 3 4 5 6 7       0 1 2 3 4 5 6 7   
+                // 需要一个在title中的偏移
+                tile_pattern_val = (((TileIndexMsb >> (7 - offset)) & 0x01) << 1) | ((TileIndexMsb >> (7 - offset)) & 0x01);
+                /*
+                    4bit0
+                    -----
+                    SAAPP
+                    |||||
+                    |||++- tile pattern的像素值
+                    |++--- attributes中的调色板编号 0-4
+                    +----- 背景0/精灵1的选择
+                */
+                uint8_t ColorIndex =  (1 << 4) | ((PaletteIndex & 0x03) <<2) | tile_pattern_val; 
+                
+                // TODO:pixel需要判断背景和精灵的像素值和层级关系
+                map.DrawPoint(x, y, getColor(ColorIndex));
+
+                if(PPUClockCnt == 256)  // 渲染完这一行的有效数据
+                {
+                    if(reg_v.fine_y < 7)   
+                    {
+                        reg_v.fine_y ++;
+                    }
+                    else    
+                    {
+                        reg_v.fine_y = 0;
+                        if(reg_v.coarse_y == 29)
+                        {
+                            reg_v.coarse_y = 0;
+                            // reg_v.nametable_x = ~reg_v.nametable_x; // TODO: 切换名称表
+                            reg_v.nametable = reg_v.nametable ^ 0x02;
+                        }
+                        else
+                        {
+                            reg_v.coarse_y ++;
+                        }
+                    }
+                }
             }
             else if(PPUClockCnt <= 320)   // 257-320
             {
@@ -632,15 +789,31 @@ namespace nes
 
         }
 
+        // uint8_t offset = (PPUClockCnt - 1) % 8;
+        // uint8_t pixel = (((TileIndexMsb >> offset) & 0x01) << 1) | ((TileIndexLsb >> offset) & 0x01);
+        // // LOG_INFO("offset:0x%x pixel:0x%x PPUClockCnt:%d ScanLineCnt:%d BgTileIndex:%d TileIndexLsb:0x%x TileIndexMsb:0x%x ScrollPosition.x:%d ScrollPosition.y:%d", 
+        // //     offset, pixel, PPUClockCnt, ScanLineCnt, BgTileIndex, TileIndexLsb, TileIndexMsb, ScrollPosition.x, ScrollPosition.y);
+        // switch (pixel)
+        // {
+        // case 0: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 0); break;
+        // case 1: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 63); break;
+        // case 2: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 127); break;
+        // case 3: map.DrawPoint(PPUClockCnt - 1, ScanLineCnt, 255); break;
+        // default:
+        //     LOG_ERROR("tmp:0x%x", pixel);
+        //     break;
+        // }
+        // // map.Refresh();
+
         PPUClockCnt ++;
         if(PPUClockCnt >= 341)
         {
             PPUClockCnt = 0;
             if(ScanLineCnt >= 261)
             {
-                ScanLineCnt = -1;  // 一帧完成
-                map.Refresh();
-                LOG_INFO("map.Refresh");
+                ScanLineCnt = -1;   // 一帧完成
+                map.Refresh();      // 刷新一帧
+                oddFrame = !oddFrame;
             }
             else
                 ScanLineCnt ++;

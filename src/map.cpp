@@ -79,6 +79,17 @@ void Map::DrawPoint(int x, int y, uint32_t color)
     SDL_SetRenderDrawColor(_sdl_renderer, r, g, b, a);
 }
 
+void Map::DrawPoint(int x, int y, uint8_t r, uint8_t g, uint8_t b)
+{
+    SDL_Rect rect;
+    rect.x = x * _proportion;
+    rect.y = y * _proportion;
+    rect.w = rect.h = _proportion;
+
+    SDL_SetRenderDrawColor(_sdl_renderer, r, g, b, 0);
+    SDL_RenderFillRect(_sdl_renderer, &rect);
+}
+
 void Map::Refresh(void)
 {
     SDL_RenderPresent(_sdl_renderer);

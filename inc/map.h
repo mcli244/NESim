@@ -11,6 +11,7 @@ public:
     SDL_Point CreatFood(void);
     void Clear(void);
     void DrawPoint(int x, int y, uint32_t color);
+    void DrawPoint(int x, int y, uint8_t r, uint8_t g, uint8_t b);
     void Refresh(void);
     int GetWidth(void){return _width;}
     int GetHeight(void){return _height;}

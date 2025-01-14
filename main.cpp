@@ -66,7 +66,7 @@ int main(int argc, char **argv)
     int addr = 0;
     while(runing)
     {
-        #if 1
+        #if 0
         clear();
         //box(stdscr,ACS_VLINE,ACS_HLINE);//画一个框
         addr = 0x0000;
@@ -161,7 +161,7 @@ int main(int argc, char **argv)
         refresh();//逻辑屏幕的改动在物理屏幕（显示器）上显示
         #endif
 
-        #if 0
+        #if 1
         ppu.clock();
         ppu.clock();
         ppu.clock();
