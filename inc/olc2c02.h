@@ -61,6 +61,14 @@ namespace nes
             /* Fixed color */
             uint32_t PixelColor[64];    // RGB
 
+            enum State{
+                PreRender,
+                Visible,
+                PostRender,
+                VerticalBlanking
+            }m_state;
+            bool m_evenFrame;
+
             struct{
                 uint8_t x;
                 uint8_t y;

@@ -422,6 +422,7 @@ namespace nes
         PPUClockCnt = 0;
         PPUDataTmp = 0;
         oddFrame = false;
+        m_state = PreRender;
     }
 
     void olc2c02::DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex)
@@ -504,7 +505,174 @@ namespace nes
     {
         // 262scanline、341clock 这里完全按照2c02的硬件行为做处理
         
-        if(ScanLineCnt == -1 || ScanLineCnt == 261)
+        #if 0
+        switch (m_state)
+        {
+        case PreRender:
+            if(PPUClockCnt == 1)
+            {
+                reg_status.SpriteOverflow = 0;
+                reg_status.SpriteZeroHit = 0;
+                reg_status.VerticalBlank = 0;
+            }
+            else if(PPUClockCnt == 258 && reg_mask.RenderBackground && reg_mask.RenderSprites)
+            {
+                reg_v.val &= ~0x41f;
+                reg_v.val |= reg_t.val & 0x41f;
+            }
+            else if(PPUClockCnt > 280 && PPUClockCnt <=304 && reg_mask.RenderBackground && reg_mask.RenderSprites)
+            {
+                reg_v.val &= ~0x7be0;
+                reg_v.val |= reg_t.val & 0x7be0;
+            }
+
+            if(PPUClockCnt >= 339 - (!m_evenFrame && reg_mask.RenderBackground && reg_mask.RenderSprites))
+            {
+                PPUClockCnt = 0;
+                ScanLineCnt = 0;
+                m_state = Visible;
+            }
+
+            // add IRQ support for MMC3
+            // if(PPUClockCnt==260 && m_showBackground && m_showSprites){
+            //     m_bus.scanlineIRQ();
+            // }
+
+            break;
+        case Visible:
+            if(PPUClockCnt >0 && PPUClockCnt <=256)
+            {
+                int x = PPUClockCnt - 1;
+                int y = ScanLineCnt;
+
+                if(reg_mask.RenderBackground)   // 背景
+                {
+                    auto x_fine = (fine_x + x) % 8;
+                    // 每8个时钟读取一个点的数据
+                    if(x%9 == 8)  
+                    {
+                        BgTileIndex = busRead(0x2000 | reg_v.val & 0x0FFF);
+                        // 提取当前像素所在的属性表中的位置
+                        uint8_t AttributeTableByte = busRead(0x23C0 
+                                                            | reg_v.nametable * 0x400 
+                                                            | reg_v.coarse_y * 8
+                                                            | reg_v.coarse_x);
+                        // 提取当前像素的调色盘
+                        uint8_t tx = (ScanLineCnt % 16);
+                        uint8_t ty = ((PPUClockCnt-1) % 16);
+                        uint8_t offset_t = 0;
+                        if(tx < 8) {
+                            if(ty < 8)  offset_t = 0;   // TL
+                            else        offset_t = 4;   // BL
+                        } else {
+                            if(ty < 8)  offset_t = 2;   // TR
+                            else        offset_t = 6;   // BR
+                        }
+                        PaletteIndex =  (AttributeTableByte >> offset_t) & 0x03;
+
+                        TileIndexLsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
+                                            | BgTileIndex * 16    
+                                            | reg_v.fine_y);     // reg_addr由于CPU设置
+                        TileIndexMsb = busRead(reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000  // reg_ctrl 由于CPU设置
+                                            | BgTileIndex * 16    
+                                            | reg_v.fine_y + 8); // reg_addr由于CPU设置
+                        
+                        // 渲染完8个像素要切换一下tile
+                        if (reg_v.coarse_x == 31)
+                        {
+                            reg_v.coarse_x = 0; // 下一行的第0个tile
+                            // reg_v.nametable_x = ~reg_v.nametable_x; // TODO: 切换名称表
+                            reg_v.nametable = reg_v.nametable ^ 0x01;
+
+                        }
+                        else
+                        {
+                            reg_v.coarse_x++;
+                        }
+                    }
+
+                    // 在这里的1-256的clock中，每一个PPUClock渲染一个像素点，既一行数据
+                    uint8_t tile_pattern_val;
+
+                    // TileIndexMsb     |    TileIndexLsb
+                    // 0 1 2 3 4 5 6 7       0 1 2 3 4 5 6 7   
+                    // 需要一个在title中的偏移
+                    tile_pattern_val = (((TileIndexMsb >> (7 - offset)) & 0x01) << 1) | ((TileIndexMsb >> (7 - offset)) & 0x01);
+                    /*
+                        4bit0
+                        -----
+                        SAAPP
+                        |||||
+                        |||++- tile pattern的像素值
+                        |++--- attributes中的调色板编号 0-4
+                        +----- 背景0/精灵1的选择
+                    */
+                    uint8_t ColorIndex =  (1 << 4) | ((PaletteIndex & 0x03) <<2) | tile_pattern_val; 
+                    
+                    // TODO:pixel需要判断背景和精灵的像素值和层级关系
+                    map.DrawPoint(x, y, getColor(ColorIndex));
+                }
+            }
+            else if(PPUClockCnt == 257 && reg_mask.RenderBackground)
+            {
+            
+            }
+            else if(PPUClockCnt == 258 && reg_mask.RenderBackground && reg_mask.RenderSprites)
+            {
+                reg_v.val &= ~0x41f;
+                reg_v.val |= reg_t.val & 0x41f;
+            }
+            else if(PPUClockCnt == 260 && reg_mask.RenderBackground && reg_mask.RenderSprites)
+            {
+                // add IRQ support for MMC3
+                // m_bus.scanlineIRQ();
+            }
+            else if(PPUClockCnt >= 340)
+            {
+                ScanLineCnt ++;
+                PPUClockCnt = 0;
+                if(ScanLineCnt >= 240)
+                    m_state == PostRender;
+            }
+            break;
+        case PostRender:
+            if(PPUClockCnt >= 340)
+            {
+                ScanLineCnt ++;
+                PPUClockCnt = 0;
+                m_state = VerticalBlanking;
+                map.Refresh();
+            }
+            break;
+        case VerticalBlanking:
+            if(PPUClockCnt == 1 && ScanLineCnt == 241)
+            {
+                reg_status.VerticalBlank = 1;
+                cpuNMICb();
+            }
+
+            if(PPUClockCnt >= 340)
+            {
+                ScanLineCnt ++;
+                PPUClockCnt = 0;
+            }
+
+            if(ScanLineCnt >= 261)
+            {
+                m_state = PreRender;
+                ScanLineCnt = 0;
+                m_evenFrame = !m_evenFrame;
+            }
+            break;
+        default:
+            LOG_ERROR("Unsupported state! state:%d", m_state);
+            break;
+        }
+
+        PPUClockCnt++;
+
+        #else
+        if(ScanLineCnt == -1)
         {
             /*
                 这是一条虚拟扫描线，其唯一目的是用下一条扫描线的前两个图块的数据填充移位寄存器。
@@ -543,9 +711,9 @@ namespace nes
             {
                 
             }
-            else if(PPUClockCnt <= 256)
+            else if(PPUClockCnt <= 256 || (PPUClockCnt >= 321 && PPUClockCnt <= 336))
             {
-                uint8_t offset = (PPUClockCnt-1) % 8;
+                uint8_t offset = (fine_x + PPUClockCnt-1) % 8;
                 switch (offset)
                 {
                 case 0: // read NameTable, 用于决定使用那一块Pattern
@@ -696,7 +864,7 @@ namespace nes
                 // TileIndexMsb     |    TileIndexLsb
                 // 0 1 2 3 4 5 6 7       0 1 2 3 4 5 6 7   
                 // 需要一个在title中的偏移
-                tile_pattern_val = (((TileIndexMsb >> (7 - offset)) & 0x01) << 1) | ((TileIndexMsb >> (7 - offset)) & 0x01);
+                tile_pattern_val = (((TileIndexMsb >> (7 - offset)) & 0x01) << 1) | ((TileIndexLsb >> (7 - offset)) & 0x01);
                 /*
                     4bit0
                     -----
@@ -710,6 +878,7 @@ namespace nes
                 
                 // TODO:pixel需要判断背景和精灵的像素值和层级关系
                 map.DrawPoint(x, y, getColor(ColorIndex));
+                //map.Refresh();
 
                 if(PPUClockCnt == 256)  // 渲染完这一行的有效数据
                 {
@@ -746,15 +915,15 @@ namespace nes
                     除此之外，每个精灵的 X 位置和属性都会从辅助 OAM 加载到各自的计数器/锁存器中。这发生在第二次垃圾名称表提取期间，属性字节在第一个刻度期间加载，X 坐标在第二个刻度期间加载。
                 */
             }
-            else if(PPUClockCnt <= 336)   // 321-336
-            {
-                /*  在这里，获取下一个扫描线的前两个图块，并将其加载到移位寄存器中。同样，每次内存访问需要 2 个 PPU 周期才能完成，而两个图块需要执行 4 个周期：
-                    名称表字节
-                    属性表字节
-                    图案桌瓷砖低
-                    图案表图块高位（图案表图块低位 +8 个字节）
-                */
-            }
+            // else if(PPUClockCnt <= 336)   // 321-336
+            // {
+            //     /*  在这里，获取下一个扫描线的前两个图块，并将其加载到移位寄存器中。同样，每次内存访问需要 2 个 PPU 周期才能完成，而两个图块需要执行 4 个周期：
+            //         名称表字节
+            //         属性表字节
+            //         图案桌瓷砖低
+            //         图案表图块高位（图案表图块低位 +8 个字节）
+            //     */
+            // }
             else if(PPUClockCnt <= 340)// 337-340
             {
                 /*  提取了两个字节，但目的未知。每次提取都需要 2 个 PPU 周期。
@@ -818,6 +987,7 @@ namespace nes
             else
                 ScanLineCnt ++;
         }
+        #endif
     }
 }
 
