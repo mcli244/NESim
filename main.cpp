@@ -167,6 +167,13 @@ int main(int argc, char **argv)
         ppu.clock();
 
         cpu.clock();
+
+        if (ppu.nmi)
+        {
+            ppu.nmi = false;
+            cpu.nmi();
+        }
+
         //cpu.pass();
         // usleep(1*1000);
         
@@ -177,11 +184,12 @@ int main(int argc, char **argv)
         //     runing = false; 
         //     break;
         // }
-        if(cpu.clock_count >= 4496751)
+        if(cpu.clock_count >= 4496751 * 2)
         {
             printf("cpu.clock_count :%d\r\n", cpu.clock_count);
             sleep(3);
-            return 0;
+            runing = false; 
+            break;
         }
 
         #else

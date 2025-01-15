@@ -69,6 +69,23 @@ namespace nes
             }m_state;
             bool m_evenFrame;
 
+            bool nmi = false;
+	        bool frame_complete = false;
+
+            // Pixel "dot" position information
+            int16_t scanline = 0;
+            int16_t cycle = 0;
+
+            // Background rendering
+            uint8_t bg_next_tile_id     = 0x00;
+            uint8_t bg_next_tile_attrib = 0x00;
+            uint8_t bg_next_tile_lsb    = 0x00;
+            uint8_t bg_next_tile_msb    = 0x00;
+            uint16_t bg_shifter_pattern_lo = 0x0000;
+            uint16_t bg_shifter_pattern_hi = 0x0000;
+            uint16_t bg_shifter_attrib_lo  = 0x0000;
+            uint16_t bg_shifter_attrib_hi  = 0x0000;
+
             struct{
                 uint8_t x;
                 uint8_t y;
@@ -165,7 +182,6 @@ namespace nes
                     uint16_t fine_y : 3;        // bit[12-14] 精细 Y 滚动
                     uint16_t unused : 1;        // bit15 控制背景滚动时，Name Table 的垂直方向切换 0: 当前垂直 Name Table 的第一部分 1: 当前垂直 Name Table 的第二部分
                 };
-
                 // 非渲染阶段
                 // 该阶段由CPU对本寄存器进行操作，在PPUDATA被读写时，本寄存器和t寄存器会进行自动累加
                 uint16_t val;   // 临时VRAM地址（15位）；也可以看作是屏幕左上角的地址。
