@@ -184,7 +184,7 @@ int main(int argc, char **argv)
         //     runing = false; 
         //     break;
         // }
-        if(cpu.clock_count >= 4496751 * 2)
+        if(cpu.clock_count >= 4496751)
         {
             printf("cpu.clock_count :%d\r\n", cpu.clock_count);
             sleep(3);
