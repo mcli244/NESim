@@ -62,7 +62,20 @@ namespace nes
         }
         else if(addr < 0x4020)    // IO Reg
         {
-
+            if(addr == 0x4014)  // OAMDMA
+            {
+                // DMA功能，这里做模拟就直接在这个时钟周期内把数据搬移到PPU内部
+                // cpuRAM --> PPUOAM (256B)
+                // TODO:这里有个潜在的问题，就是运行模拟器的设备如果拷贝这256字节用时太长，则可能会影响时序
+                uint8_t *p = m_ppu->getOAMAddr();
+                int cnt = 0;
+                uint16_t r_addr = addr;
+                while(1)
+                {
+                    p[cnt++] = read(r_addr++);
+                    if(cnt >= 256) break;
+                }
+            }
         }
         else
         {

@@ -29,6 +29,7 @@ namespace nes
             bool connectCartridge(nes::Cartridge *cart);
             bool setNMICb(std::function<void(void)> cb);
             uint32_t getColor(uint8_t index);
+            uint8_t* getOAMAddr(void) { return pOAM; };
             
             void reset(void);
             void clock(void);
@@ -55,46 +56,43 @@ namespace nes
             std::function<void(void)> cpuNMICb;
             uint8_t PPUDataTmp;
 
+            /* Dispaly */
+            Map map = Map(256, 256);
+
             bool oddFrame;
+            bool nmi;
+	        bool frame_complete;
             uint8_t fine_x;
 
             /* Fixed color */
             uint32_t PixelColor[64];    // RGB
 
-            enum State{
-                PreRender,
-                Visible,
-                PostRender,
-                VerticalBlanking
-            }m_state;
-            bool m_evenFrame;
-
-            bool nmi = false;
-	        bool frame_complete = false;
-
-            // Pixel "dot" position information
-            int16_t scanline = 0;
-            int16_t cycle = 0;
-
-            // Background rendering
-            uint8_t bg_next_tile_id     = 0x00;
-            uint8_t bg_next_tile_attrib = 0x00;
-            uint8_t bg_next_tile_lsb    = 0x00;
-            uint8_t bg_next_tile_msb    = 0x00;
-            uint16_t bg_shifter_pattern_lo = 0x0000;
-            uint16_t bg_shifter_pattern_hi = 0x0000;
-            uint16_t bg_shifter_attrib_lo  = 0x0000;
-            uint16_t bg_shifter_attrib_hi  = 0x0000;
-
-            struct{
-                uint8_t x;
-                uint8_t y;
-            }ScrollPosition;
-            
             int32_t ScanLineCnt, PPUClockCnt;
-            uint16_t BgTileIndex, PaletteIndex;
-            uint16_t NameTableIndex, AttributeTableIndex, TileIndexLsb, TileIndexMsb;
-            uint16_t TileIndexLsbLast, TileIndexMsbLast;
+            uint16_t BgTileIndex, BgTileIndexLsb, BgTileIndexMsb, BgPaletteIndex;
+            uint8_t muxBit = 0;
+
+            struct sObjectAttributeEntry
+            {
+                uint8_t y;			// 精灵顶部的 Y 位置
+                uint8_t id;			// patterntable中的编号
+                uint8_t attribute;	// Flags define how sprite should be rendered
+                                    // 76543210
+                                    // ||||||||
+                                    // ||||||++- 精灵的调色板（4 至 7）
+                                    // |||+++--- 未实现（读取 0）
+                                    // ||+------ 优先级（0：在背景前面；1：在背景后面）
+                                    // |+------- 水平翻转精灵
+                                    // +-------- 垂直翻转精灵
+                uint8_t x;			// 精灵左侧的 X 位置。
+            } OAM[64];
+            uint16_t SpritesTileIndexLsb, SpritesTileIndexMsb;
+            uint8_t *pOAM = (uint8_t *)OAM;
+            uint16_t oamAddr = 0;
+
+            sObjectAttributeEntry spriteScanline[8];    // 用于存储评估阶段一行命中的精灵数据，最多8个
+            uint8_t spriteScanlineCnt = 0;                  // spriteScanline中存储的命中的精灵数量
+            
+            /* REG */
             enum PPUREG{
                 PPUCTRL	    = 0x2000,
                 PPUMASK	    = 0x2001,
@@ -106,9 +104,6 @@ namespace nes
                 PPUDATA	    = 0x2007,
                 OAMDMA      = 0x4014
             };
-
-            // display
-            Map map = Map(256, 256);
 
             // register
             union

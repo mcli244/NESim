@@ -174,6 +174,9 @@ namespace nes
             reg_w.Toggle = 0;
             break;
         case OAMADDR:    break;
+        case OAMDATA:    
+            data = pOAM[oamAddr];
+            break;
         case PPUSCROLL:  break;
         case PPUADDR:    break;
         case PPUDATA:  
@@ -219,8 +222,12 @@ namespace nes
             reg_mask.val = dat;  
             break;
         case PPUSTATUS:    break;
-        // case OAMADDR:    LOG_DEBUG("OAMADDR!!!!!!!!!!! cpu_addr:0x%x dat:0x%x", cpu_addr, dat); break;
-        // case OAMDATA:    LOG_DEBUG("OAMDATA!!!!!!!!!!! cpu_addr:0x%x dat:0x%x", cpu_addr, dat); break;
+        case OAMADDR:
+            oamAddr = dat;
+            break;
+        case OAMDATA:    
+            pOAM[oamAddr] = dat;
+            break;
         case PPUSCROLL:    
             // 此寄存器用于改变滚动位置，告诉 PPU 通过PPUCTRL选择的名称表中的哪个像素应该位于渲染屏幕的左上角。 
             // PPUSCROLL 需要两次写入：第一次是 X 滚动，第二次是 Y 滚动。
@@ -235,6 +242,7 @@ namespace nes
                 reg_t.fine_y = dat & 0x07;
                 reg_t.coarse_y = dat >> 3;
                 reg_w.Toggle = 0;
+                // LOG_INFO("reg_t %02d %02d %02d %02d", reg_t.coarse_x, reg_t.coarse_y, fine_x, reg_t.fine_y);
             }
             break;
         case PPUADDR:    
@@ -435,19 +443,7 @@ namespace nes
         PPUClockCnt = 0;
         PPUDataTmp = 0;
         oddFrame = false;
-        m_state = PreRender;
-
         fine_x = 0x00;
-        scanline = 0;
-        cycle = 0;
-        bg_next_tile_id = 0x00;
-        bg_next_tile_attrib = 0x00;
-        bg_next_tile_lsb = 0x00;
-        bg_next_tile_msb = 0x00;
-        bg_shifter_pattern_lo = 0x0000;
-        bg_shifter_pattern_hi = 0x0000;
-        bg_shifter_attrib_lo = 0x0000;
-        bg_shifter_attrib_hi = 0x0000;
     }
 
     void olc2c02::DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex)
@@ -592,164 +588,75 @@ namespace nes
             }
         };
 
-        auto LoadBackgroundShifters = [&]()
-        {	
-            bg_shifter_pattern_lo = (bg_shifter_pattern_lo & 0xFF00) | bg_next_tile_lsb;
-            bg_shifter_pattern_hi = (bg_shifter_pattern_hi & 0xFF00) | bg_next_tile_msb;
-
-            bg_shifter_attrib_lo  = (bg_shifter_attrib_lo & 0xFF00) | ((bg_next_tile_attrib & 0b01) ? 0xFF : 0x00);
-            bg_shifter_attrib_hi  = (bg_shifter_attrib_hi & 0xFF00) | ((bg_next_tile_attrib & 0b10) ? 0xFF : 0x00);
-        };
-
-
-        auto UpdateShifters = [&]()
+        auto SpriteEvaluation = [&]()
         {
-            if (reg_mask.RenderBackground)
+            /* 跟背景提取动作相同，(实际上PPU硬件电路共用的一套)
+                1. 垃圾名称表字节   (2个PPUClockCnt)
+                2. 垃圾名称表字节   (2个PPUClockCnt)
+                3. 图案表图块低位   (2个PPUClockCnt)
+                4. 图案表图块高位（图案表图块低位 +8 个字节）   (2个PPUClockCnt)
+                这里模拟只读取图案表数据就行了
+                数据来源：
+                CPU(cpuRAM或者cart) --> DMA --> PPU OAM
+                虽然PPU提供了OAMADDR和OAMDATA两个寄存器，但是基本上不使用，因为单字节太慢了(硬件)，所以选择DMA方式传输
+                PPU到这个时钟周期就认为OAM的数据被更新好了，这里直接使用即可。
+                X
+                |
+                v
+            Y-->x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x 
+            ----x  x  x  x  x  x  x---- ScanLineCnt
+                x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x
+            */
+            uint8_t oamCnt = 0;
+            while(oamCnt < 64 && spriteScanlineCnt < 9)
             {
-                // Shifting background tile pattern row
-                bg_shifter_pattern_lo <<= 1;
-                bg_shifter_pattern_hi <<= 1;
-
-                // Shifting palette attributes by 1
-                bg_shifter_attrib_lo <<= 1;
-                bg_shifter_attrib_hi <<= 1;
-            }
-        };
-
-        #if 0
-        // All but 1 of the secanlines is visible to the user. The pre-render scanline
-        // at -1, is used to configure the "shifters" for the first visible scanline, 0.
-        if (scanline >= -1 && scanline < 240)
-        {		
-            if (scanline == 0 && cycle == 0)
-            {
-                // "Odd Frame" cycle skip
-                cycle = 1;
-            }
-
-            if (scanline == -1 && cycle == 1)
-            {
-                // Effectively start of new frame, so clear vertical blank flag
-                reg_status.VerticalBlank = 0;
-            }
-
-            if ((cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle < 336))
-            {
-                UpdateShifters();
-
-                switch ((cycle - 1) % 8)
+                int32_t diff_y = ScanLineCnt - OAM[oamCnt].y;
+                if(diff_y >= 0 && diff_y < (reg_ctrl.SpriteSize ? 16 : 0))  // 命中
                 {
-                case 0:
-                    LoadBackgroundShifters();
-                    bg_next_tile_id = busRead(0x2000 | (reg_v.val & 0x0FFF));
-                    break;
-                case 2:		
-                    bg_next_tile_attrib = busRead(0x23C0 | ( ((reg_v.nametable&0x01) ? 1:0) << 11) 
-                                                        | ( ((reg_v.nametable&0x02) ? 1:0)  << 10) 
-                                                        | ((reg_v.coarse_y >> 2) << 3) 
-                                                        | (reg_v.coarse_x >> 2));
-                    if (reg_v.coarse_y & 0x02) bg_next_tile_attrib >>= 4;
-                    if (reg_v.coarse_x & 0x02) bg_next_tile_attrib >>= 2;
-                    bg_next_tile_attrib &= 0x03;
-                    break;
-                case 4: 
-                    bg_next_tile_lsb = busRead((reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000)  // reg_ctrl 由于CPU设置
-                                            | bg_next_tile_id * 16    
-                                            | reg_v.fine_y);     // reg_addr由于CPU设置
-                    break;
-                case 6:
-                    bg_next_tile_msb = busRead((reg_ctrl.BackgroundPattrenTableIndex << 12)
-                                            + ((uint16_t)bg_next_tile_id << 4)
-                                            + (reg_v.fine_y) + 8);
-                    break;
-                case 7:
-                    if (cycle == 256)
+                    if(oamCnt == 0 && spriteScanlineCnt < 8)
                     {
-                        IncrementScrollY();
+                        // 标记0号精灵被命中 TODO:跟后面渲染时背景和精灵的叠加有关
                     }
-                    IncrementScrollX();
-                    break;
+                    memcpy(&spriteScanline[spriteScanlineCnt], &OAM[oamCnt], sizeof(sObjectAttributeEntry)); 
+                    spriteScanlineCnt ++;
                 }
+                oamCnt ++;
             }
+        };
 
-            //...and reset the x position
-            if (cycle == 257)
-            {
-                LoadBackgroundShifters();
-                TransferAddressX();
-            }
-
-            // Superfluous reads of tile id at end of scanline
-            if (cycle == 337 || cycle == 339)
-            {
-                bg_next_tile_id = busRead(0x2000 | (reg_v.val & 0x0FFF));
-            }
-
-            if (scanline == -1 && cycle >= 280 && cycle < 305)
-            {
-                // End of vertical blank period so reset the Y address ready for rendering
-                TransferAddressY();
-            }
-        }
-
-        if (scanline == 240)
+        auto SpriteScanMatch = [&]()
         {
-            // Post Render Scanline - Do Nothing!
-        }
-
-        if (scanline >= 241 && scanline < 261)
-        {
-            if (scanline == 241 && cycle == 1)
+            // 在绘制背景的8个像素时调用
+            // 从spriteScanline中去选择一个精灵
+            /*
+                X          PPUClockCnt           
+                |              |
+                v              v
+            Y-->x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x
+                x  x  x  x  x  x  x
+            ----x  x  x  x  x  x  x----ScanLineCnt
+                x  x  x  x  x  x  x
+                x  x  x  x  x  x  x
+                x  x  x  x  x  x  x
+                x  x  x  x  x  x  x
+            */
+            uint8_t i = 0;
+            uint8_t SpPiexl = 0;
+            for(i=0; i<spriteScanlineCnt; i++)
             {
-                // Effectively end of frame, so set vertical blank flag
-                reg_status.VerticalBlank = 1;
-
-                // If the control register tells us to emit a NMI when
-                // entering vertical blanking period, do it! The CPU
-                // will be informed that rendering is complete so it can
-                // perform operations with the PPU knowing it wont
-                // produce visible artefacts
-                if (reg_ctrl.EnableNMI) 
-                    nmi = true;
+                // spriteScanline[i].x =
             }
-        }
 
-        uint8_t bg_pixel = 0x00;   // The 2-bit pixel to be rendered
-        uint8_t bg_palette = 0x00; // The 3-bit index of the palette the pixel indexes
-
-        if (reg_mask.RenderBackground)
-        {
-            uint16_t bit_mux = 0x8000 >> fine_x;
-            uint8_t p0_pixel = (bg_shifter_pattern_lo & bit_mux) > 0;
-            uint8_t p1_pixel = (bg_shifter_pattern_hi & bit_mux) > 0;
-
-            // Combine to form pixel index
-            bg_pixel = (p1_pixel << 1) | p0_pixel;
-
-            // Get palette
-            uint8_t bg_pal0 = (bg_shifter_attrib_lo & bit_mux) > 0;
-            uint8_t bg_pal1 = (bg_shifter_attrib_hi & bit_mux) > 0;
-            bg_palette = (bg_pal1 << 1) | bg_pal0;
-        }
+            return ;
+        };
 
         
-        uint8_t ColorIndex = busRead(0x3F00 + (bg_palette << 2) + bg_pixel) & 0x3F;
-        map.DrawPoint(cycle - 1, scanline, getColor(ColorIndex));
-
-        cycle++;
-        if (cycle >= 341)
-        {
-            cycle = 0;
-            scanline++;
-            if (scanline >= 261)
-            {
-                map.Refresh();
-                scanline = -1;
-                frame_complete = true;
-            }
-        }
-        #else
-
         // 262scanline、341clock 这里完全按照2c02的硬件行为做处理
         if(ScanLineCnt >= -1 && ScanLineCnt <= 239)   // 正常图片显示周期， PPU不停在读取内存数据，所以CPU不要访问PPU内存。
         {
@@ -757,22 +664,16 @@ namespace nes
             {
                 
             }
+
             if(ScanLineCnt == -1 && PPUClockCnt == 1)
             {
                 reg_status.VerticalBlank = 0;
 			    reg_status.SpriteOverflow = 0;
 			    reg_status.SpriteZeroHit = 0;
             }
-            if(ScanLineCnt == -1 && (PPUClockCnt >= 280 && PPUClockCnt < 305))
-            {
-                // End of vertical blank period so reset the Y address ready for rendering
-                TransferAddressY();
-            }
-
+        
             if ((PPUClockCnt >= 1 && PPUClockCnt <=256) || (PPUClockCnt >= 321 && PPUClockCnt <=336))
             {
-                UpdateShifters();
-
                 uint8_t offset = (PPUClockCnt-1) % 8;
                 switch (offset)
                 {
@@ -781,7 +682,6 @@ namespace nes
                     $0000-$0FFF	$1000	Pattern table 0	Cartridge
                     $1000-$1FFF	$1000	Pattern table 1	Cartridge
                     */
-                    LoadBackgroundShifters();
                     BgTileIndex = busRead(0x2000 | reg_v.val & 0x0FFF);  // reg_addr是CPU设置的
                     break;
                 case 2: // read AttributeTable
@@ -843,10 +743,10 @@ namespace nes
                     */
                     {
                         // 提取当前像素所在的属性表中的位置
-                        uint8_t AttributeTableByte = busRead(0x23C0 
-                                                            | reg_v.nametable * 0x400 
-                                                            | reg_v.coarse_y * 8
-                                                            | reg_v.coarse_x);
+                        // uint8_t BgAttributeTableIndex = busRead(0x23C0 
+                        //                                     | reg_v.nametable * 0x400 
+                        //                                     | reg_v.coarse_y * 8
+                        //                                     | reg_v.coarse_x);
                         // 提取当前像素的调色盘
                         // uint8_t tx = (ScanLineCnt % 16);
                         // uint8_t ty = ((PPUClockCnt-1) % 16);
@@ -859,13 +759,13 @@ namespace nes
                         //     else        offset_t = 6;   // BR
                         // }
                         // PaletteIndex =  (AttributeTableByte >> offset_t) & 0x03;
-                        bg_next_tile_attrib = busRead(0x23C0 | ( ((reg_v.nametable&0x01) ? 1:0) << 11) 
+                        BgPaletteIndex = busRead(0x23C0 | ( ((reg_v.nametable&0x01) ? 1:0) << 11) 
                                                         | ( ((reg_v.nametable&0x02) ? 1:0)  << 10) 
                                                         | ((reg_v.coarse_y >> 2) << 3) 
                                                         | (reg_v.coarse_x >> 2));
-                        if (reg_v.coarse_y & 0x02) bg_next_tile_attrib >>= 4;
-                        if (reg_v.coarse_x & 0x02) bg_next_tile_attrib >>= 2;
-                        PaletteIndex = bg_next_tile_attrib &= 0x03;
+                        if (reg_v.coarse_y & 0x02) BgPaletteIndex >>= 4;
+                        if (reg_v.coarse_x & 0x02) BgPaletteIndex >>= 2;
+                        BgPaletteIndex &= 0x03;
                     }
                     break;
                     /*
@@ -895,12 +795,12 @@ namespace nes
                     3. reg_v.fine_y :是本次像素在Tile中所在的行，Tile每行8bit构成
                     */
                 case 4:
-                    bg_next_tile_lsb = busRead((reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000 )  // reg_ctrl 由于CPU设置
+                    BgTileIndexLsb = busRead((reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000 )  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
                                             | reg_v.fine_y);     // reg_addr由于CPU设置
                     break;
                 case 6:
-                    bg_next_tile_msb = busRead((reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000)  // reg_ctrl 由于CPU设置
+                    BgTileIndexMsb = busRead((reg_ctrl.BackgroundPattrenTableIndex ? 0x1000 : 0x0000)  // reg_ctrl 由于CPU设置
                                             | BgTileIndex * 16    
                                             | reg_v.fine_y + 8); // reg_addr由于CPU设置
                     break;   
@@ -909,34 +809,49 @@ namespace nes
                     {
                         IncrementScrollY();
                     }
-                    IncrementScrollX();
+                    // inc hori 水平增加,由PPU自己维护，这个水平坐标是属性相关的坐标，跟调色盘相关
+                    IncrementScrollX(); 
 
-                    for(uint8_t col=0; col<8; col++)
+                    if(PPUClockCnt <= 256)  // 321-336也会提取，但是不渲染
                     {
-                        uint8_t pixel = ((bg_next_tile_msb & 0x01) << 1) | (bg_next_tile_lsb & 0x01);
-                        bg_next_tile_lsb >>= 1;
-                        bg_next_tile_msb >>= 1;
-                        uint8_t pixel_x = PPUClockCnt - 1 + (7 - col);
-                        uint8_t pixel_y = ScanLineCnt;
-                        uint8_t ColorIndex =  busRead(0x3F00 + (PaletteIndex << 2) + pixel) & 0x3F; 
-                        map.DrawPoint(pixel_x, pixel_y, getColor(ColorIndex));
+                        // LOG_INFO("ScanLineCnt:%03d PPUClockCnt:%03d offset:%02d reg_v:%02d %02d %02d %02d ", 
+                        //     ScanLineCnt, PPUClockCnt, offset, reg_v.coarse_x, reg_v.coarse_y, reg_v.fine_y, reg_v.nametable);
+                        uint8_t mux_bit = 0x80;
+                        for(uint8_t col=0; col<8; col++)
+                        {
+                            uint8_t pixel = (((BgTileIndexMsb & mux_bit) ? 1:0) << 1) | ((BgTileIndexLsb & mux_bit) ? 1:0);
+                            mux_bit >>= 1;
+                            uint8_t pixel_x = PPUClockCnt - 1 + col;
+                            uint8_t pixel_y = ScanLineCnt;
+                            uint8_t ColorIndex =  busRead(0x3F00 + (BgPaletteIndex << 2) + pixel) & 0x3F; 
+                            map.DrawPoint(pixel_x, pixel_y, getColor(ColorIndex));
+                        }
                     }
-
                     break;
                 default:
                     break;
                 };
             }
 
-            if(PPUClockCnt == 257)
+            if(PPUClockCnt == 257)  // 从t寄存器更新到v寄存器，更新水平坐标
             {
-                LoadBackgroundShifters();
                 TransferAddressX();
             }
 
-            if (PPUClockCnt == 338 || PPUClockCnt == 340)
+            if(ScanLineCnt == -1 && (PPUClockCnt >= 280 && PPUClockCnt <= 304))
             {
-                bg_next_tile_id = busRead(0x2000 | (reg_v.val & 0x0FFF));
+                // End of vertical blank period so reset the Y address ready for rendering
+                TransferAddressY();
+            }
+
+            if(PPUClockCnt == 320)    // 读取下一条扫描线的精灵数据, PPU精灵评估阶段
+            {
+                SpriteEvaluation();
+            }
+
+            if (PPUClockCnt == 337 || PPUClockCnt == 339)   // 一行的最后四个PPUClockCnt，共提取两个NT，作用不详
+            {
+                BgTileIndex = busRead(0x2000 | (reg_v.val & 0x0FFF));
             }
             
         }
@@ -975,7 +890,6 @@ namespace nes
             else
                 ScanLineCnt ++;
         }
-        #endif
     }
 }
 
