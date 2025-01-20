@@ -27,9 +27,9 @@ int main(int argc, char **argv)
     }
     
     nes::olc2c02 ppu;
-    ppu.reset();
     ppu.connectCartridge(&cartridge);
-
+    ppu.reset();
+    
     nes::bus     mainBus;
     if(false == mainBus.connect(&cartridge, &ppu))
     {

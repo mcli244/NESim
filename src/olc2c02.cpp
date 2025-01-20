@@ -62,17 +62,9 @@ OAMDMA	    $4014	AAAA AAAA	W	OAM DMA high address
 */
 namespace nes
 {
-    olc2c02::olc2c02()
+
+    void olc2c02::pixelColorInit(void)
     {
-        map.Clear();
-        memset(&PatternTable[0], 0, 1024);
-        memset(&PatternTable[1], 0, 1024);
-
-        memset(&NameTable[0], 0, 1024);
-        memset(&NameTable[1], 0, 1024);
-
-        memset(&Palette, 0, 32);
-
         auto ColorMux = [&](uint8_t r, uint8_t g, uint8_t b) 
         {
             uint32_t color = 0;
@@ -80,7 +72,6 @@ namespace nes
             return color;
         };
 
-    
         PixelColor[0x00] = ColorMux(84, 84, 84);
         PixelColor[0x01] = ColorMux(0, 30, 116);
         PixelColor[0x02] = ColorMux(8, 16, 144);
@@ -148,6 +139,19 @@ namespace nes
         PixelColor[0x3D] = ColorMux(160, 162, 160);
         PixelColor[0x3E] = ColorMux(0, 0, 0);
         PixelColor[0x3F] = ColorMux(0, 0, 0);
+    }
+
+    olc2c02::olc2c02()
+    {
+        map.Clear();
+        memset(&PatternTable[0], 0, 1024);
+        memset(&PatternTable[1], 0, 1024);
+
+        memset(&NameTable[0], 0, 1024);
+        memset(&NameTable[1], 0, 1024);
+
+        memset(&Palette, 0, 32);
+        pixelColorInit();
     };
 
     olc2c02::~olc2c02()
@@ -155,6 +159,7 @@ namespace nes
         m_cart = nullptr;
     };
 
+    
     uint32_t olc2c02::getColor(uint8_t index)
     {
         return PixelColor[index&0x3F];
@@ -444,6 +449,7 @@ namespace nes
         PPUDataTmp = 0;
         oddFrame = false;
         fine_x = 0x00;
+        spriteScanlineCnt = 0;
     }
 
     void olc2c02::DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex)
@@ -612,11 +618,16 @@ namespace nes
                 x  x  x  x  x  x  x 
                 x  x  x  x  x  x  x
             */
+           
+            // memset(spriteScanline, 0xFF, 8 * sizeof(sObjectAttributeEntry));
+			// spriteScanlineCnt = 0;
+
             uint8_t oamCnt = 0;
             while(oamCnt < 64 && spriteScanlineCnt < 9)
             {
                 int32_t diff_y = ScanLineCnt - OAM[oamCnt].y;
-                if(diff_y >= 0 && diff_y < (reg_ctrl.SpriteSize ? 16 : 0))  // 命中
+                //LOG_INFO("ScanLineCnt:%d oamCnt:%d OAM[oamCnt].y:%d diff_y:%d", ScanLineCnt, oamCnt, OAM[oamCnt].y, diff_y);
+                if(diff_y >= 0 && diff_y < (reg_ctrl.SpriteSize ? 16 : 8))  // 命中
                 {
                     if(oamCnt == 0 && spriteScanlineCnt < 8)
                     {
@@ -624,36 +635,80 @@ namespace nes
                     }
                     memcpy(&spriteScanline[spriteScanlineCnt], &OAM[oamCnt], sizeof(sObjectAttributeEntry)); 
                     spriteScanlineCnt ++;
+                    //LOG_INFO("ScanLineCnt:%d spriteScanlineCnt:%d", ScanLineCnt, spriteScanlineCnt);
                 }
                 oamCnt ++;
             }
+            
         };
 
-        auto SpriteScanMatch = [&]()
+        // 根据当前x值，从spriteScanline(行命中的精灵列表)中去选择一个精灵
+        auto SpriteScanMatch = [&](int x)
         {
-            // 在绘制背景的8个像素时调用
-            // 从spriteScanline中去选择一个精灵
             /*
                 X          PPUClockCnt           
                 |              |
                 v              v
-            Y-->x  x  x  x  x  x  x 
-                x  x  x  x  x  x  x
-                x  x  x  x  x  x  x
-            ----x  x  x  x  x  x  x----ScanLineCnt
-                x  x  x  x  x  x  x
-                x  x  x  x  x  x  x
-                x  x  x  x  x  x  x
-                x  x  x  x  x  x  x
+            Y-->x  x  x  x  x  x  x  x 
+                x  x  x  x  x  x  x  x
+                x  x  x  x  x  x  x  x
+            ----x  x  x  x  x  x  x  x----ScanLineCnt
+                x  x  x  x  x  x  x  x
+                x  x  x  x  x  x  x  x
+                x  x  x  x  x  x  x  x
+                x  x  x  x  x  x  x  x
             */
-            uint8_t i = 0;
+            int i = 0;
             uint8_t SpPiexl = 0;
             for(i=0; i<spriteScanlineCnt; i++)
             {
-                // spriteScanline[i].x =
+                int diff = x - spriteScanline[i].x;
+                if ( diff >= 0  && diff <= 7)
+                    return i;
             }
 
-            return ;
+            return -1;
+        };
+
+        auto getSpriteTile = [&](int index)
+        {
+            uint16_t SpriteTileLsbAddr;
+
+            // 分8x8和8x16两种情况
+            if(0 == reg_ctrl.SpriteSize)    // 8x8
+            {
+                if(spriteScanline[index].attribute & 0x40)  // 水平翻转
+                {
+                    SpriteTileLsbAddr = 
+                                    (reg_ctrl.SpritePattrenTableIndex ? 0x1000:0)
+                                    | (spriteScanline[index].id << 4)    // 每个tile 16Bytes
+                                    | (ScanLineCnt - spriteScanline[index].y);
+                }
+                else
+                {
+                    SpriteTileLsbAddr = 
+                                    (reg_ctrl.SpritePattrenTableIndex ? 0x1000:0)
+                                    | (spriteScanline[index].id << 4)    // 每个tile 16Bytes
+                                    | (7 -(ScanLineCnt - spriteScanline[index].y));
+                }
+            }
+            else    // 8X16
+            {
+            
+            }
+
+            SpritesTileIndexLsb = busRead(SpriteTileLsbAddr); 
+            SpritesTileIndexMsb = busRead(SpriteTileLsbAddr + 8); 
+        };
+
+        auto getSpriteColorIndex = [&](int index)
+        {
+            return spriteScanline[index].attribute & 0x03;
+        };
+
+        auto getSpritePriority= [&](int index)
+        {
+            return spriteScanline[index].attribute & 0x20;
         };
 
         
@@ -674,6 +729,38 @@ namespace nes
         
             if ((PPUClockCnt >= 1 && PPUClockCnt <=256) || (PPUClockCnt >= 321 && PPUClockCnt <=336))
             {
+                if(PPUClockCnt <= 256 && ScanLineCnt >= 0)  // 321-336也会提取，但是不渲染
+                {
+                    uint8_t pixel_x = PPUClockCnt - 1;
+                    uint8_t pixel_y = ScanLineCnt; 
+
+                    // 精灵
+                    // int SpriteIndex = SpriteScanMatch(pixel_x);
+                    // if(SpriteIndex >= 0)
+                    // {
+                    //     getSpriteTile(SpriteIndex);
+                    // }
+                    // uint8_t SpritePixel = (((SpritesTileIndexMsb & muxBit) ? 1:0) << 1) | ((SpritesTileIndexLsb & muxBit) ? 1:0);
+                    // uint8_t SpriteColorIndex = busRead(0x3F10 + (getSpriteColorIndex(SpriteIndex) << 2) + SpritePixel) & 0x3F;
+
+                    // 背景
+                    uint8_t pixel = (((BgTileIndexMsbLast & muxBit) ? 1:0) << 1) | ((BgTileIndexLsbLast & muxBit) ? 1:0);
+                    uint8_t ColorIndex =  busRead(0x3F00 + (BgPaletteIndexLast << 2) + pixel) & 0x3F;
+                    muxBit >>= 1;
+
+                    // 判断精灵和背景
+                    // if(SpriteIndex >= 0)
+                    // {
+                    //     if(getSpritePriority(SpriteIndex) == 0) // 精灵在背景前面
+                    //     {
+                    //         ColorIndex = SpriteColorIndex;
+                    //     }
+
+                    // }
+                    
+                    map.DrawPoint(pixel_x, pixel_y, getColor(ColorIndex));   
+                }
+
                 uint8_t offset = (PPUClockCnt-1) % 8;
                 switch (offset)
                 {
@@ -812,25 +899,17 @@ namespace nes
                     // inc hori 水平增加,由PPU自己维护，这个水平坐标是属性相关的坐标，跟调色盘相关
                     IncrementScrollX(); 
 
-                    if(PPUClockCnt <= 256)  // 321-336也会提取，但是不渲染
-                    {
-                        // LOG_INFO("ScanLineCnt:%03d PPUClockCnt:%03d offset:%02d reg_v:%02d %02d %02d %02d ", 
-                        //     ScanLineCnt, PPUClockCnt, offset, reg_v.coarse_x, reg_v.coarse_y, reg_v.fine_y, reg_v.nametable);
-                        uint8_t mux_bit = 0x80;
-                        for(uint8_t col=0; col<8; col++)
-                        {
-                            uint8_t pixel = (((BgTileIndexMsb & mux_bit) ? 1:0) << 1) | ((BgTileIndexLsb & mux_bit) ? 1:0);
-                            mux_bit >>= 1;
-                            uint8_t pixel_x = PPUClockCnt - 1 + col;
-                            uint8_t pixel_y = ScanLineCnt;
-                            uint8_t ColorIndex =  busRead(0x3F00 + (BgPaletteIndex << 2) + pixel) & 0x3F; 
-                            map.DrawPoint(pixel_x, pixel_y, getColor(ColorIndex));
-                        }
-                    }
+                    BgTileIndexLast = BgTileIndex;
+                    BgTileIndexLsbLast = BgTileIndexLsb;
+                    BgTileIndexMsbLast = BgTileIndexMsb;
+                    BgPaletteIndexLast = BgPaletteIndex;
+                    muxBit = 0x80;
                     break;
                 default:
                     break;
                 };
+
+                
             }
 
             if(PPUClockCnt == 257)  // 从t寄存器更新到v寄存器，更新水平坐标
@@ -846,7 +925,7 @@ namespace nes
 
             if(PPUClockCnt == 320)    // 读取下一条扫描线的精灵数据, PPU精灵评估阶段
             {
-                SpriteEvaluation();
+                //SpriteEvaluation();
             }
 
             if (PPUClockCnt == 337 || PPUClockCnt == 339)   // 一行的最后四个PPUClockCnt，共提取两个NT，作用不详

@@ -69,7 +69,7 @@ namespace nes
                 // TODO:这里有个潜在的问题，就是运行模拟器的设备如果拷贝这256字节用时太长，则可能会影响时序
                 uint8_t *p = m_ppu->getOAMAddr();
                 int cnt = 0;
-                uint16_t r_addr = addr;
+                uint16_t r_addr = value;
                 while(1)
                 {
                     p[cnt++] = read(r_addr++);

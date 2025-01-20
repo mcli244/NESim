@@ -44,6 +44,7 @@ namespace nes
             void DrawTile(uint8_t PatternTableIndex, uint8_t TileIndex);
             void DrawAllTile(uint8_t PatternTableIndex);
             uint8_t getPaletteIndex();
+            void pixelColorInit(void);
         
         public: // TODO: 测试需要外部访问寄存器，正式版本需要改为private
             /* VARM */
@@ -68,6 +69,7 @@ namespace nes
             uint32_t PixelColor[64];    // RGB
 
             int32_t ScanLineCnt, PPUClockCnt;
+            uint16_t BgTileIndexLast, BgTileIndexLsbLast, BgTileIndexMsbLast, BgPaletteIndexLast;
             uint16_t BgTileIndex, BgTileIndexLsb, BgTileIndexMsb, BgPaletteIndex;
             uint8_t muxBit = 0;
 
@@ -75,6 +77,10 @@ namespace nes
             {
                 uint8_t y;			// 精灵顶部的 Y 位置
                 uint8_t id;			// patterntable中的编号
+                                    // 76543210
+                                    // ||||||||
+                                    // |||||||+- Bank ($0000 or $1000) of tiles
+                                    // +++++++-- Tile number of top of sprite (0 to 254; bottom half gets the next tile)
                 uint8_t attribute;	// Flags define how sprite should be rendered
                                     // 76543210
                                     // ||||||||
@@ -85,12 +91,12 @@ namespace nes
                                     // +-------- 垂直翻转精灵
                 uint8_t x;			// 精灵左侧的 X 位置。
             } OAM[64];
-            uint16_t SpritesTileIndexLsb, SpritesTileIndexMsb;
+            uint8_t SpritesTileIndexLsb, SpritesTileIndexMsb;
             uint8_t *pOAM = (uint8_t *)OAM;
             uint16_t oamAddr = 0;
 
             sObjectAttributeEntry spriteScanline[8];    // 用于存储评估阶段一行命中的精灵数据，最多8个
-            uint8_t spriteScanlineCnt = 0;                  // spriteScanline中存储的命中的精灵数量
+            uint8_t spriteScanlineCnt;                  // spriteScanline中存储的命中的精灵数量
             
             /* REG */
             enum PPUREG{
