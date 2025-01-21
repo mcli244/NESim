@@ -68,6 +68,31 @@ namespace nes
             /* Fixed color */
             uint32_t PixelColor[64];    // RGB
 
+            // ==================================================================================
+            // Background rendering =========================================
+            uint8_t bg_next_tile_id     = 0x00;
+            uint8_t bg_next_tile_attrib = 0x00;
+            uint8_t bg_next_tile_lsb    = 0x00;
+            uint8_t bg_next_tile_msb    = 0x00;
+            uint16_t bg_shifter_pattern_lo = 0x0000;
+            uint16_t bg_shifter_pattern_hi = 0x0000;
+            uint16_t bg_shifter_attrib_lo  = 0x0000;
+            uint16_t bg_shifter_attrib_hi  = 0x0000;
+            // Pixel "dot" position information
+            int16_t scanline = 0;
+            int16_t cycle = 0;
+
+            uint8_t sprite_count;
+            uint8_t sprite_shifter_pattern_lo[8];
+            uint8_t sprite_shifter_pattern_hi[8];
+
+            // Sprite Zero Collision Flags
+            bool bSpriteZeroHitPossible = false;
+            bool bSpriteZeroBeingRendered = false;
+            bool odd_frame;
+            // ==================================================================================
+
+
             int32_t ScanLineCnt, PPUClockCnt;
             uint16_t BgTileIndexLast, BgTileIndexLsbLast, BgTileIndexMsbLast, BgPaletteIndexLast;
             uint16_t BgTileIndex, BgTileIndexLsb, BgTileIndexMsb, BgPaletteIndex;
